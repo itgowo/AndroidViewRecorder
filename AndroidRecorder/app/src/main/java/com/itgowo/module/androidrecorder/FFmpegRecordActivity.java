@@ -23,10 +23,10 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.Toast;
 
-import com.github.crazyorr.ffmpegrecorder.data.FrameToRecord;
-import com.github.crazyorr.ffmpegrecorder.data.RecordFragment;
-import com.github.crazyorr.ffmpegrecorder.util.CameraHelper;
-import com.github.crazyorr.ffmpegrecorder.util.MiscUtils;
+import com.itgowo.module.androidrecorder.data.FrameToRecord;
+import com.itgowo.module.androidrecorder.data.RecordFragment;
+import com.itgowo.module.androidrecorder.util.CameraHelper;
+import com.itgowo.module.androidrecorder.util.MiscUtils;
 
 import org.bytedeco.javacpp.avcodec;
 import org.bytedeco.javacpp.avutil;

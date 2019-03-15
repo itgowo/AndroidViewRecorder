@@ -6,7 +6,8 @@ import android.os.Build;
 import android.util.AttributeSet;
 import android.view.TextureView;
 
-import com.github.crazyorr.ffmpegrecorder.util.MiscUtils;
+import com.itgowo.module.androidrecorder.util.MiscUtils;
+
 
 /**
  * Created by wanglei02 on 2016/1/6.
