@@ -83,7 +83,7 @@ public class FFmpegRecordActivity extends BaseActivity {
     private int frameRate = 30;
     private int frameDepth = Frame.DEPTH_UBYTE;
     private int frameChannels = 2;
-
+    private long lastPreviewFrameTime;
     // Workaround for https://code.google.com/p/android/issues/detail?id=190966
 
     private onRecordDataListener onRecordDataListener;
@@ -202,7 +202,18 @@ public class FFmpegRecordActivity extends BaseActivity {
 
             @Override
             public void onRecordVideoData(Frame d) throws FFmpegFrameRecorder.Exception {
+                if (mFrameRecorder != null) {
+                    mFrameRecorder.record(d);
+                }
+            }
 
+            @Override
+            public void onRecordTimestamp(long timestamp) throws Exception {
+                if (mFrameRecorder != null) {
+                    if (timestamp > mFrameRecorder.getTimestamp()) {
+                        mFrameRecorder.setTimestamp(timestamp);
+                    }
+                }
             }
         };
     }
@@ -294,54 +305,10 @@ public class FFmpegRecordActivity extends BaseActivity {
         mCamera.addCallbackBuffer(bufferByte);
         mCamera.setPreviewCallbackWithBuffer(new Camera.PreviewCallback() {
 
-            private long lastPreviewFrameTime;
 
             @Override
             public void onPreviewFrame(byte[] data, Camera camera) {
-                long thisPreviewFrameTime = System.currentTimeMillis();
-                if (lastPreviewFrameTime > 0) {
-                    Log.d(LOG_TAG, "Preview frame interval: " + (thisPreviewFrameTime - lastPreviewFrameTime) + "ms");
-                }
-                lastPreviewFrameTime = thisPreviewFrameTime;
-
-                // get video data
-                if (isRecording) {
-                    if (mAudioRecordThread == null || !mAudioRecordThread.isRunning()) {
-                        // wait for AudioRecord to init and start
-                        mRecordFragments.peek().setStartTimestamp(System.currentTimeMillis());
-                    } else {
-                        // pop the current record fragment when calculate total recorded time
-                        RecordFragment curFragment = mRecordFragments.pop();
-                        long recordedTime = calculateTotalRecordedTime(mRecordFragments);
-                        // push it back after calculation
-                        mRecordFragments.push(curFragment);
-                        long curRecordedTime = System.currentTimeMillis()
-                                - curFragment.getStartTimestamp() + recordedTime;
-                        // check if exceeds time limit
-                        if (curRecordedTime > MAX_VIDEO_LENGTH) {
-                            pauseRecording();
-                            new FinishRecordingTask(context).execute();
-                            return;
-                        }
-
-                        long timestamp = 1000 * curRecordedTime;
-                        Frame frame;
-                        FrameToRecord frameToRecord = mRecycledFrameQueue.poll();
-                        if (frameToRecord != null) {
-                            frame = frameToRecord.getFrame();
-                            frameToRecord.setTimestamp(timestamp);
-                        } else {
-                            frame = new Frame(mPreviewWidth, mPreviewHeight, frameDepth, frameChannels);
-                            frameToRecord = new FrameToRecord(timestamp, frame);
-                        }
-                        ((ByteBuffer) frame.image[0].position(0)).put(data);
-
-                        if (mFrameToRecordQueue.offer(frameToRecord)) {
-                            mFrameToRecordCount++;
-                        }
-                    }
-                }
-                mCamera.addCallbackBuffer(data);
+                previewFrameCamera(data, camera);
             }
         });
 
@@ -351,6 +318,53 @@ public class FFmpegRecordActivity extends BaseActivity {
             ioe.printStackTrace();
         }
         mCamera.startPreview();
+    }
+
+    private void previewFrameCamera(byte[] data, Camera camera) {
+        long thisPreviewFrameTime = System.currentTimeMillis();
+        if (lastPreviewFrameTime > 0) {
+            Log.d(LOG_TAG, "Preview frame interval: " + (thisPreviewFrameTime - lastPreviewFrameTime) + "ms");
+        }
+        lastPreviewFrameTime = thisPreviewFrameTime;
+
+        // get video data
+        if (isRecording) {
+            if (mAudioRecordThread == null || !mAudioRecordThread.isRunning()) {
+                // wait for AudioRecord to init and start
+                mRecordFragments.peek().setStartTimestamp(System.currentTimeMillis());
+            } else {
+                // pop the current record fragment when calculate total recorded time
+                RecordFragment curFragment = mRecordFragments.pop();
+                long recordedTime = calculateTotalRecordedTime(mRecordFragments);
+                // push it back after calculation
+                mRecordFragments.push(curFragment);
+                long curRecordedTime = System.currentTimeMillis()
+                        - curFragment.getStartTimestamp() + recordedTime;
+                // check if exceeds time limit
+                if (curRecordedTime > MAX_VIDEO_LENGTH) {
+                    pauseRecording();
+                    new FinishRecordingTask(context).execute();
+                    return;
+                }
+
+                long timestamp = 1000 * curRecordedTime;
+                Frame frame;
+                FrameToRecord frameToRecord = mRecycledFrameQueue.poll();
+                if (frameToRecord != null) {
+                    frame = frameToRecord.getFrame();
+                    frameToRecord.setTimestamp(timestamp);
+                } else {
+                    frame = new Frame(mPreviewWidth, mPreviewHeight, frameDepth, frameChannels);
+                    frameToRecord = new FrameToRecord(timestamp, frame);
+                }
+                ((ByteBuffer) frame.image[0].position(0)).put(data);
+
+                if (mFrameToRecordQueue.offer(frameToRecord)) {
+                    mFrameToRecordCount++;
+                }
+            }
+        }
+        mCamera.addCallbackBuffer(data);
     }
 
     private void stopPreview() {
@@ -599,9 +613,7 @@ public class FFmpegRecordActivity extends BaseActivity {
                     }
                     cropHeight = previewHeight;
                     cropWidth = cropHeight * videoWidth / videoHeight;
-                    crop = String.format("crop=%d:%d:%d:%d",
-                            cropWidth, cropHeight,
-                            (previewWidth - cropWidth) / 2, (previewHeight - cropHeight) / 2);
+                    crop = String.format("crop=%d:%d:%d:%d", cropWidth, cropHeight, (previewWidth - cropWidth) / 2, (previewHeight - cropHeight) / 2);
                     scale = String.format("scale=%d:%d", videoWidth, videoHeight);
                     break;
                 case Surface.ROTATION_180:
@@ -628,8 +640,7 @@ public class FFmpegRecordActivity extends BaseActivity {
                 filters.add(scale);
             }
 
-            FFmpegFrameFilter frameFilter = new FFmpegFrameFilter(TextUtils.join(",", filters),
-                    previewWidth, previewHeight);
+            FFmpegFrameFilter frameFilter = new FFmpegFrameFilter(TextUtils.join(",", filters), previewWidth, previewHeight);
             frameFilter.setPixelFormat(avutil.AV_PIX_FMT_NV21);
             frameFilter.setFrameRate(frameRate);
             try {
@@ -653,34 +664,17 @@ public class FFmpegRecordActivity extends BaseActivity {
                     }
                     break;
                 }
-
                 if (mFrameRecorder != null) {
-                    long timestamp = recordedFrame.getTimestamp();
-                    if (timestamp > mFrameRecorder.getTimestamp()) {
-                        mFrameRecorder.setTimestamp(timestamp);
-                    }
-                    long startTime = System.currentTimeMillis();
-//                    Frame filteredFrame = recordedFrame.getFrame();
                     Frame filteredFrame = null;
                     try {
+                        onRecordDataListener.onRecordTimestamp(recordedFrame.getTimestamp());
                         frameFilter.push(recordedFrame.getFrame());
                         filteredFrame = frameFilter.pull();
-                    } catch (FrameFilter.Exception e) {
+                        onRecordDataListener.onRecordVideoData(filteredFrame);
+                    } catch (Exception e) {
                         e.printStackTrace();
                     }
-                    try {
-                        mFrameRecorder.record(filteredFrame);
-                    } catch (FFmpegFrameRecorder.Exception e) {
-                        e.printStackTrace();
-                    }
-                    long endTime = System.currentTimeMillis();
-                    long processTime = endTime - startTime;
-                    mTotalProcessFrameTime += processTime;
-                    Log.d(LOG_TAG, "This frame process time: " + processTime + "ms");
-                    long totalAvg = mTotalProcessFrameTime / ++mFrameRecordedCount;
-                    Log.d(LOG_TAG, "Avg frame process time: " + totalAvg + "ms");
                 }
-                Log.d(LOG_TAG, mFrameRecordedCount + " / " + mFrameToRecordCount);
                 mRecycledFrameQueue.offer(recordedFrame);
             }
         }
