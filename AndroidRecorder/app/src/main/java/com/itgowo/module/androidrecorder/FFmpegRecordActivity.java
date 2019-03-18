@@ -261,15 +261,6 @@ public class FFmpegRecordActivity extends BaseActivity {
         }.execute();
     }
 
-    private void setPreviewSize(int width, int height) {
-        if (MiscUtils.isOrientationLandscape(this)) {
-            recordManager.getmPreview().setPreviewSize(width, height);
-        } else {
-            // Swap width and height
-            recordManager.getmPreview().setPreviewSize(height, width);
-        }
-    }
-
     private void startPreview(SurfaceTexture surfaceTexture) {
         if (mCamera == null) {
             return;
@@ -283,7 +274,7 @@ public class FFmpegRecordActivity extends BaseActivity {
         if (mPreviewWidth != previewSize.width || mPreviewHeight != previewSize.height) {
             mPreviewWidth = previewSize.width;
             mPreviewHeight = previewSize.height;
-            setPreviewSize(mPreviewWidth, mPreviewHeight);
+            recordManager.setPreviewSize(mPreviewWidth, mPreviewHeight);
             recordManager.getmPreview().requestLayout();
         }
         parameters.setPreviewSize(mPreviewWidth, mPreviewHeight);
