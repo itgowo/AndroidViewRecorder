@@ -15,6 +15,7 @@ import com.itgowo.module.androidrecorder.data.FrameToRecord;
 import com.itgowo.module.androidrecorder.data.RecordFragment;
 import com.itgowo.module.androidrecorder.recorder.AudioRecordThread;
 import com.itgowo.module.androidrecorder.recorder.ProgressDialogTask;
+import com.itgowo.module.androidrecorder.recorder.RecordManager;
 import com.itgowo.module.androidrecorder.recorder.VideoRecordThread;
 import com.itgowo.module.androidrecorder.recorder.onRecordDataListener;
 import com.itgowo.module.androidrecorder.util.CameraHelper;
@@ -44,7 +45,6 @@ public class FFmpegRecordActivity extends BaseActivity {
     // both in milliseconds
     private static final long MIN_VIDEO_LENGTH = 1 * 1000;
     private static final long MAX_VIDEO_LENGTH = 90 * 1000;
-    private FixedRatioCroppedTextureView mPreview;
     private Button mBtnResumeOrPause;
     private Button mBtnDone;
     private Button mBtnSwitchCamera;
@@ -79,12 +79,13 @@ public class FFmpegRecordActivity extends BaseActivity {
     // Workaround for https://code.google.com/p/android/issues/detail?id=190966
 
     private onRecordDataListener onRecordDataListener;
+    private RecordManager recordManager;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_ffmpeg_record);
-        mPreview = findViewById(R.id.camera_preview);
+        FixedRatioCroppedTextureView mPreview = findViewById(R.id.camera_preview);
         mBtnResumeOrPause = findViewById(R.id.btn_resume_or_pause);
         mBtnDone = findViewById(R.id.btn_done);
         mBtnSwitchCamera = findViewById(R.id.btn_switch_camera);
@@ -92,9 +93,12 @@ public class FFmpegRecordActivity extends BaseActivity {
 
 //        mCameraId = Camera.CameraInfo.CAMERA_FACING_BACK;
         mCameraId = Camera.CameraInfo.CAMERA_FACING_FRONT;
-        setPreviewSize(mPreviewWidth, mPreviewHeight);
-        mPreview.setCroppedSizeWeight(videoWidth, videoHeight);
-        mPreview.setSurfaceTextureListener(new TextureView.SurfaceTextureListener() {
+
+
+        recordManager = new RecordManager(this, mPreview);
+        recordManager.getmPreview().setPreviewSize(mPreviewWidth, mPreviewHeight);
+        recordManager.getmPreview().setCroppedSizeWeight(videoWidth, videoHeight);
+        recordManager.getmPreview().setSurfaceTextureListener(new TextureView.SurfaceTextureListener() {
             @Override
             public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
                 startPreview(surface);
@@ -140,7 +144,7 @@ public class FFmpegRecordActivity extends BaseActivity {
         mBtnSwitchCamera.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                final SurfaceTexture surfaceTexture = mPreview.getSurfaceTexture();
+                final SurfaceTexture surfaceTexture = recordManager.getmPreview().getSurfaceTexture();
                 new ProgressDialogTask<Void, Integer, Void>(R.string.please_wait, context) {
 
                     @Override
@@ -238,7 +242,7 @@ public class FFmpegRecordActivity extends BaseActivity {
     @Override
     public void doAfterAllPermissionsGranted() {
         acquireCamera();
-        SurfaceTexture surfaceTexture = mPreview.getSurfaceTexture();
+        SurfaceTexture surfaceTexture = recordManager.getmPreview().getSurfaceTexture();
         if (surfaceTexture != null) {
             // SurfaceTexture already created
             startPreview(surfaceTexture);
@@ -259,10 +263,10 @@ public class FFmpegRecordActivity extends BaseActivity {
 
     private void setPreviewSize(int width, int height) {
         if (MiscUtils.isOrientationLandscape(this)) {
-            mPreview.setPreviewSize(width, height);
+            recordManager.getmPreview().setPreviewSize(width, height);
         } else {
             // Swap width and height
-            mPreview.setPreviewSize(height, width);
+            recordManager.getmPreview().setPreviewSize(height, width);
         }
     }
 
@@ -280,7 +284,7 @@ public class FFmpegRecordActivity extends BaseActivity {
             mPreviewWidth = previewSize.width;
             mPreviewHeight = previewSize.height;
             setPreviewSize(mPreviewWidth, mPreviewHeight);
-            mPreview.requestLayout();
+            recordManager.getmPreview().requestLayout();
         }
         parameters.setPreviewSize(mPreviewWidth, mPreviewHeight);
 //        parameters.setPreviewFormat(ImageFormat.NV21);

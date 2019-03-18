@@ -9,5 +9,6 @@ public interface onRecordDataListener {
     void onRecordAudioData(Buffer... data) throws FFmpegFrameRecorder.Exception;
 
     void onRecordVideoData(Frame data) throws FFmpegFrameRecorder.Exception;
-    void onRecordTimestamp(long timestamp) throws  Exception;
+
+    void onRecordTimestamp(long timestamp) throws Exception;
 }
