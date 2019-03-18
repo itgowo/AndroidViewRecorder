@@ -5,9 +5,7 @@ import android.content.Intent;
 import android.graphics.SurfaceTexture;
 import android.hardware.Camera;
 import android.os.Bundle;
-import android.text.TextUtils;
 import android.util.Log;
-import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
 import android.widget.Button;
@@ -16,31 +14,25 @@ import android.widget.Toast;
 import com.itgowo.module.androidrecorder.data.FrameToRecord;
 import com.itgowo.module.androidrecorder.data.RecordFragment;
 import com.itgowo.module.androidrecorder.recorder.AudioRecordThread;
-import com.itgowo.module.androidrecorder.recorder.BaseRecordThread;
 import com.itgowo.module.androidrecorder.recorder.ProgressDialogTask;
+import com.itgowo.module.androidrecorder.recorder.VideoRecordThread;
 import com.itgowo.module.androidrecorder.recorder.onRecordDataListener;
 import com.itgowo.module.androidrecorder.util.CameraHelper;
 import com.itgowo.module.androidrecorder.util.MiscUtils;
 
 import org.bytedeco.javacpp.avcodec;
-import org.bytedeco.javacpp.avutil;
-import org.bytedeco.javacv.FFmpegFrameFilter;
 import org.bytedeco.javacv.FFmpegFrameRecorder;
 import org.bytedeco.javacv.Frame;
-import org.bytedeco.javacv.FrameFilter;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Stack;
 import java.util.concurrent.LinkedBlockingQueue;
-
-import static java.lang.Thread.State.WAITING;
 
 public class FFmpegRecordActivity extends BaseActivity {
     private static final String LOG_TAG = FFmpegRecordActivity.class.getSimpleName();
@@ -460,7 +452,10 @@ public class FFmpegRecordActivity extends BaseActivity {
     private void startRecording() {
         mAudioRecordThread = new AudioRecordThread(sampleAudioRateInHz, onRecordDataListener);
         mAudioRecordThread.start();
-        mVideoRecordThread = new VideoRecordThread();
+        mVideoRecordThread = new VideoRecordThread(context, frameRate, mFrameToRecordQueue, mRecycledFrameQueue, onRecordDataListener);
+        if (mVideoRecordThread != null) {
+            mVideoRecordThread.setPreviewWidthHeight(mPreviewWidth, mPreviewHeight);
+        }
         mVideoRecordThread.start();
     }
 
@@ -534,157 +529,6 @@ public class FFmpegRecordActivity extends BaseActivity {
             recordedTime += recordFragment.getDuration();
         }
         return recordedTime;
-    }
-
-
-    class VideoRecordThread extends BaseRecordThread {
-        @Override
-        public void run() {
-            int previewWidth = mPreviewWidth;
-            int previewHeight = mPreviewHeight;
-
-            List<String> filters = new ArrayList<>();
-            // Transpose
-            String transpose = null;
-            String hflip = null;
-            String vflip = null;
-            String crop = null;
-            String scale = null;
-            int cropWidth;
-            int cropHeight;
-            Camera.CameraInfo info = new Camera.CameraInfo();
-            Camera.getCameraInfo(mCameraId, info);
-            int rotation = getWindowManager().getDefaultDisplay().getRotation();
-            switch (rotation) {
-                case Surface.ROTATION_0:
-                    switch (info.orientation) {
-                        case 270:
-                            if (info.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
-                                transpose = "transpose=clock_flip"; // Same as preview display
-                            } else {
-                                transpose = "transpose=cclock"; // Mirrored horizontally as preview display
-                            }
-                            break;
-                        case 90:
-                            if (info.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
-                                transpose = "transpose=cclock_flip"; // Same as preview display
-                            } else {
-                                transpose = "transpose=clock"; // Mirrored horizontally as preview display
-                            }
-                            break;
-                    }
-                    cropWidth = previewHeight;
-                    cropHeight = cropWidth * videoHeight / videoWidth;
-                    crop = String.format("crop=%d:%d:%d:%d",
-                            cropWidth, cropHeight,
-                            (previewHeight - cropWidth) / 2, (previewWidth - cropHeight) / 2);
-                    // swap width and height
-                    scale = String.format("scale=%d:%d", videoHeight, videoWidth);
-                    break;
-                case Surface.ROTATION_90:
-                case Surface.ROTATION_270:
-                    switch (rotation) {
-                        case Surface.ROTATION_90:
-                            // landscape-left
-                            switch (info.orientation) {
-                                case 270:
-                                    if (info.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
-                                        hflip = "hflip";
-                                    }
-                                    break;
-                            }
-                            break;
-                        case Surface.ROTATION_270:
-                            // landscape-right
-                            switch (info.orientation) {
-                                case 90:
-                                    if (info.facing == Camera.CameraInfo.CAMERA_FACING_BACK) {
-                                        hflip = "hflip";
-                                        vflip = "vflip";
-                                    }
-                                    break;
-                                case 270:
-                                    if (info.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
-                                        vflip = "vflip";
-                                    }
-                                    break;
-                            }
-                            break;
-                    }
-                    cropHeight = previewHeight;
-                    cropWidth = cropHeight * videoWidth / videoHeight;
-                    crop = String.format("crop=%d:%d:%d:%d", cropWidth, cropHeight, (previewWidth - cropWidth) / 2, (previewHeight - cropHeight) / 2);
-                    scale = String.format("scale=%d:%d", videoWidth, videoHeight);
-                    break;
-                case Surface.ROTATION_180:
-                    break;
-            }
-            // transpose
-            if (transpose != null) {
-                filters.add(transpose);
-            }
-            // horizontal flip
-            if (hflip != null) {
-                filters.add(hflip);
-            }
-            // vertical flip
-            if (vflip != null) {
-                filters.add(vflip);
-            }
-            // crop
-            if (crop != null) {
-                filters.add(crop);
-            }
-            // scale (to designated size)
-            if (scale != null) {
-                filters.add(scale);
-            }
-
-            FFmpegFrameFilter frameFilter = new FFmpegFrameFilter(TextUtils.join(",", filters), previewWidth, previewHeight);
-            frameFilter.setPixelFormat(avutil.AV_PIX_FMT_NV21);
-            frameFilter.setFrameRate(frameRate);
-            try {
-                frameFilter.start();
-            } catch (FrameFilter.Exception e) {
-                e.printStackTrace();
-            }
-
-            isRunning = true;
-            FrameToRecord recordedFrame;
-
-            while (isRunning || !mFrameToRecordQueue.isEmpty()) {
-                try {
-                    recordedFrame = mFrameToRecordQueue.take();
-                } catch (InterruptedException ie) {
-                    ie.printStackTrace();
-                    try {
-                        frameFilter.stop();
-                    } catch (FrameFilter.Exception e) {
-                        e.printStackTrace();
-                    }
-                    break;
-                }
-                if (mFrameRecorder != null) {
-                    Frame filteredFrame = null;
-                    try {
-                        onRecordDataListener.onRecordTimestamp(recordedFrame.getTimestamp());
-                        frameFilter.push(recordedFrame.getFrame());
-                        filteredFrame = frameFilter.pull();
-                        onRecordDataListener.onRecordVideoData(filteredFrame);
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                }
-                mRecycledFrameQueue.offer(recordedFrame);
-            }
-        }
-
-        public void stopRunning() {
-            super.stopRunning();
-            if (getState() == WAITING) {
-                interrupt();
-            }
-        }
     }
 
 
