@@ -19,19 +19,16 @@ import com.itgowo.module.androidrecorder.recorder.RecordManager;
 import com.itgowo.module.androidrecorder.recorder.VideoRecordThread;
 import com.itgowo.module.androidrecorder.recorder.onRecordDataListener;
 import com.itgowo.module.androidrecorder.util.CameraHelper;
-import com.itgowo.module.androidrecorder.util.MiscUtils;
 
 import org.bytedeco.javacpp.avcodec;
 import org.bytedeco.javacv.FFmpegFrameRecorder;
 import org.bytedeco.javacv.Frame;
 
 import java.io.File;
-import java.io.IOException;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.List;
 import java.util.Stack;
 import java.util.concurrent.LinkedBlockingQueue;
 
@@ -50,8 +47,7 @@ public class FFmpegRecordActivity extends BaseActivity {
     private Button mBtnSwitchCamera;
     private Button mBtnReset;
 
-    private int mCameraId;
-    private Camera mCamera;
+
     private FFmpegFrameRecorder mFrameRecorder;
     private VideoRecordThread mVideoRecordThread;
     private AudioRecordThread mAudioRecordThread;
@@ -90,18 +86,43 @@ public class FFmpegRecordActivity extends BaseActivity {
         mBtnDone = findViewById(R.id.btn_done);
         mBtnSwitchCamera = findViewById(R.id.btn_switch_camera);
         mBtnReset = findViewById(R.id.btn_reset);
+        onRecordDataListener = new onRecordDataListener() {
+            @Override
+            public void onRecordAudioData(Buffer... data) throws FFmpegFrameRecorder.Exception {
+                if (mFrameRecorder != null) {
+                    mFrameRecorder.recordSamples(data);
+                }
+            }
 
-//        mCameraId = Camera.CameraInfo.CAMERA_FACING_BACK;
-        mCameraId = Camera.CameraInfo.CAMERA_FACING_FRONT;
+            @Override
+            public void onRecordVideoData(Frame d) throws FFmpegFrameRecorder.Exception {
+                if (mFrameRecorder != null) {
+                    mFrameRecorder.record(d);
+                }
+            }
 
+            @Override
+            public void onRecordTimestamp(long timestamp) throws Exception {
+                if (mFrameRecorder != null) {
+                    if (timestamp > mFrameRecorder.getTimestamp()) {
+                        mFrameRecorder.setTimestamp(timestamp);
+                    }
+                }
+            }
 
-        recordManager = new RecordManager(this, mPreview);
+            @Override
+            public void onPriviewData(byte[] data, Camera camera) throws Exception {
+                previewFrameCamera(data, camera);
+            }
+        };
+
+        recordManager = new RecordManager(this, mPreview, onRecordDataListener);
         recordManager.getmPreview().setPreviewSize(mPreviewWidth, mPreviewHeight);
         recordManager.getmPreview().setCroppedSizeWeight(videoWidth, videoHeight);
         recordManager.getmPreview().setSurfaceTextureListener(new TextureView.SurfaceTextureListener() {
             @Override
             public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
-                startPreview(surface);
+                recordManager.startPreview(surface, mPreviewWidth, mPreviewHeight);
             }
 
             @Override
@@ -150,13 +171,13 @@ public class FFmpegRecordActivity extends BaseActivity {
                     @Override
                     protected Void doInBackground(Void... params) {
                         stopRecording();
-                        stopPreview();
+                        recordManager.stopPreview();
                         releaseCamera();
 
-                        mCameraId = (mCameraId + 1) % 2;
+                        recordManager.switchCamera();
 
                         acquireCamera();
-                        startPreview(surfaceTexture);
+                        recordManager.startPreview(surfaceTexture, mPreviewWidth, mPreviewHeight);
                         startRecording();
                         return null;
                     }
@@ -188,30 +209,7 @@ public class FFmpegRecordActivity extends BaseActivity {
         mRecycledFrameQueue = new LinkedBlockingQueue<>(2);
         mRecordFragments = new Stack<>();
 
-        onRecordDataListener = new onRecordDataListener() {
-            @Override
-            public void onRecordAudioData(Buffer... data) throws FFmpegFrameRecorder.Exception {
-                if (mFrameRecorder != null) {
-                    mFrameRecorder.recordSamples(data);
-                }
-            }
 
-            @Override
-            public void onRecordVideoData(Frame d) throws FFmpegFrameRecorder.Exception {
-                if (mFrameRecorder != null) {
-                    mFrameRecorder.record(d);
-                }
-            }
-
-            @Override
-            public void onRecordTimestamp(long timestamp) throws Exception {
-                if (mFrameRecorder != null) {
-                    if (timestamp > mFrameRecorder.getTimestamp()) {
-                        mFrameRecorder.setTimestamp(timestamp);
-                    }
-                }
-            }
-        };
     }
 
     @Override
@@ -235,7 +233,7 @@ public class FFmpegRecordActivity extends BaseActivity {
     public void onActivityPause() {
         pauseRecording();
         stopRecording();
-        stopPreview();
+        recordManager.stopPreview();
         releaseCamera();
     }
 
@@ -245,7 +243,7 @@ public class FFmpegRecordActivity extends BaseActivity {
         SurfaceTexture surfaceTexture = recordManager.getmPreview().getSurfaceTexture();
         if (surfaceTexture != null) {
             // SurfaceTexture already created
-            startPreview(surfaceTexture);
+            recordManager.startPreview(surfaceTexture, mPreviewWidth, mPreviewHeight);
         }
         new ProgressDialogTask<Void, Integer, Void>(R.string.initiating, context) {
 
@@ -259,52 +257,6 @@ public class FFmpegRecordActivity extends BaseActivity {
                 return null;
             }
         }.execute();
-    }
-
-    private void startPreview(SurfaceTexture surfaceTexture) {
-        if (mCamera == null) {
-            return;
-        }
-
-        Camera.Parameters parameters = mCamera.getParameters();
-        List<Camera.Size> previewSizes = parameters.getSupportedPreviewSizes();
-        Camera.Size previewSize = CameraHelper.getOptimalSize(previewSizes,
-                PREFERRED_PREVIEW_WIDTH, PREFERRED_PREVIEW_HEIGHT);
-        // if changed, reassign values and request layout
-        if (mPreviewWidth != previewSize.width || mPreviewHeight != previewSize.height) {
-            mPreviewWidth = previewSize.width;
-            mPreviewHeight = previewSize.height;
-            recordManager.setPreviewSize(mPreviewWidth, mPreviewHeight);
-            recordManager.getmPreview().requestLayout();
-        }
-        parameters.setPreviewSize(mPreviewWidth, mPreviewHeight);
-//        parameters.setPreviewFormat(ImageFormat.NV21);
-        if (parameters.getSupportedFocusModes().contains(
-                Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO)) {
-            parameters.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO);
-        }
-        mCamera.setParameters(parameters);
-
-        mCamera.setDisplayOrientation(CameraHelper.getCameraDisplayOrientation(this, mCameraId));
-
-        // YCbCr_420_SP (NV21) format
-        byte[] bufferByte = new byte[mPreviewWidth * mPreviewHeight * 3 / 2];
-        mCamera.addCallbackBuffer(bufferByte);
-        mCamera.setPreviewCallbackWithBuffer(new Camera.PreviewCallback() {
-
-
-            @Override
-            public void onPreviewFrame(byte[] data, Camera camera) {
-                previewFrameCamera(data, camera);
-            }
-        });
-
-        try {
-            mCamera.setPreviewTexture(surfaceTexture);
-        } catch (IOException ioe) {
-            ioe.printStackTrace();
-        }
-        mCamera.startPreview();
     }
 
     private void previewFrameCamera(byte[] data, Camera camera) {
@@ -351,28 +303,23 @@ public class FFmpegRecordActivity extends BaseActivity {
                 }
             }
         }
-        mCamera.addCallbackBuffer(data);
+        recordManager.getmCamera().addCallbackBuffer(data);
+
     }
 
-    private void stopPreview() {
-        if (mCamera != null) {
-            mCamera.stopPreview();
-            mCamera.setPreviewCallbackWithBuffer(null);
-        }
-    }
 
     private void acquireCamera() {
         try {
-            mCamera = Camera.open(mCameraId);
+            recordManager.setmCamera(Camera.open(recordManager.getmCameraId()));
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
     private void releaseCamera() {
-        if (mCamera != null) {
-            mCamera.release();        // release the camera for other applications
-            mCamera = null;
+        if (recordManager.getmCamera() != null) {
+            recordManager.getmCamera().release();        // release the camera for other applications
+            recordManager.setmCamera(null);
         }
     }
 

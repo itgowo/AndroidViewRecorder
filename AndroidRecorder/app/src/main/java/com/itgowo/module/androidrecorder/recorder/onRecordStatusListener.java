@@ -1,5 +1,7 @@
 package com.itgowo.module.androidrecorder.recorder;
 
+import android.hardware.Camera;
+
 public interface onRecordStatusListener {
 
     void onRecordStoped() throws Exception;
@@ -9,4 +11,6 @@ public interface onRecordStatusListener {
     void onRecordPause() throws Exception;
 
     void onRecordResume() throws Exception;
+
+
 }
