@@ -33,11 +33,20 @@ public class RecordManager {
         return mCamera;
     }
 
-    public RecordManager setmCamera(Camera mCamera) {
-        this.mCamera = mCamera;
-        return this;
-    }
 
+    public void releaseCamera() {
+        if (mCamera != null) {
+            mCamera.release();
+            mCamera = null;
+        }
+    }
+    public void acquireCamera() {
+        try {
+            mCamera=Camera.open(mCameraId);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
     public RecordManager(Activity context, FixedRatioCroppedTextureView mPreview, onRecordDataListener recordDataListener) {
         this.context = context;
         this.mPreview = mPreview;

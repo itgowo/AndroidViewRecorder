@@ -172,11 +172,11 @@ public class FFmpegRecordActivity extends BaseActivity {
                     protected Void doInBackground(Void... params) {
                         stopRecording();
                         recordManager.stopPreview();
-                        releaseCamera();
+                        recordManager.releaseCamera();
 
                         recordManager.switchCamera();
 
-                        acquireCamera();
+                        recordManager.acquireCamera();
                         recordManager.startPreview(surfaceTexture, mPreviewWidth, mPreviewHeight);
                         startRecording();
                         return null;
@@ -234,12 +234,12 @@ public class FFmpegRecordActivity extends BaseActivity {
         pauseRecording();
         stopRecording();
         recordManager.stopPreview();
-        releaseCamera();
+        recordManager.releaseCamera();
     }
 
     @Override
     public void doAfterAllPermissionsGranted() {
-        acquireCamera();
+        recordManager.acquireCamera();
         SurfaceTexture surfaceTexture = recordManager.getmPreview().getSurfaceTexture();
         if (surfaceTexture != null) {
             // SurfaceTexture already created
@@ -305,22 +305,6 @@ public class FFmpegRecordActivity extends BaseActivity {
         }
         recordManager.getmCamera().addCallbackBuffer(data);
 
-    }
-
-
-    private void acquireCamera() {
-        try {
-            recordManager.setmCamera(Camera.open(recordManager.getmCameraId()));
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void releaseCamera() {
-        if (recordManager.getmCamera() != null) {
-            recordManager.getmCamera().release();        // release the camera for other applications
-            recordManager.setmCamera(null);
-        }
     }
 
     private void initRecorder() {
