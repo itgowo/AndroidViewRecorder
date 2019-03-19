@@ -5,11 +5,13 @@ import android.graphics.SurfaceTexture;
 import android.hardware.Camera;
 
 import com.itgowo.module.androidrecorder.FixedRatioCroppedTextureView;
+import com.itgowo.module.androidrecorder.data.FrameToRecord;
 import com.itgowo.module.androidrecorder.util.CameraHelper;
 import com.itgowo.module.androidrecorder.util.MiscUtils;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.concurrent.LinkedBlockingQueue;
 
 public class RecordManager {
     private static final int PREFERRED_PREVIEW_WIDTH = 640;
@@ -19,6 +21,10 @@ public class RecordManager {
     private Activity context;
     private FixedRatioCroppedTextureView mPreview;
     private onRecordDataListener recordDataListener;
+
+
+    private LinkedBlockingQueue<FrameToRecord> mFrameToRecordQueue;
+    private LinkedBlockingQueue<FrameToRecord> mRecycledFrameQueue;
 
 
     private int mCameraId = Camera.CameraInfo.CAMERA_FACING_FRONT;
@@ -40,17 +46,64 @@ public class RecordManager {
             mCamera = null;
         }
     }
+
     public void acquireCamera() {
         try {
-            mCamera=Camera.open(mCameraId);
+            mCamera = Camera.open(mCameraId);
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
+
     public RecordManager(Activity context, FixedRatioCroppedTextureView mPreview, onRecordDataListener recordDataListener) {
         this.context = context;
         this.mPreview = mPreview;
         this.recordDataListener = recordDataListener;
+        // At most buffer 10 Frame
+        mFrameToRecordQueue = new LinkedBlockingQueue<>(10);
+        // At most recycle 2 Frame
+        mRecycledFrameQueue = new LinkedBlockingQueue<>(2);
+    }
+
+    private void stopRecording() {
+//        if (mAudioRecordThread != null) {
+//            if (mAudioRecordThread.isRunning()) {
+//                mAudioRecordThread.stopRunning();
+//            }
+//        }
+//
+//        if (mVideoRecordThread != null) {
+//            if (mVideoRecordThread.isRunning()) {
+//                mVideoRecordThread.stopRunning();
+//            }
+//        }
+//
+//        try {
+//            if (mAudioRecordThread != null) {
+//                mAudioRecordThread.join();
+//            }
+//            if (mVideoRecordThread != null) {
+//                mVideoRecordThread.join();
+//            }
+//        } catch (InterruptedException e) {
+//            e.printStackTrace();
+//        }
+//        mAudioRecordThread = null;
+//        mVideoRecordThread = null;
+
+
+        mFrameToRecordQueue.clear();
+        mRecycledFrameQueue.clear();
+    }
+
+    @Deprecated
+    public LinkedBlockingQueue<FrameToRecord> getmFrameToRecordQueue() {
+        return mFrameToRecordQueue;
+    }
+
+    @Deprecated
+    public LinkedBlockingQueue<FrameToRecord> getmRecycledFrameQueue() {
+        return mRecycledFrameQueue;
     }
 
     public void switchCamera() {

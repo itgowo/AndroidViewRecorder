@@ -53,8 +53,8 @@ public class FFmpegRecordActivity extends BaseActivity {
     private AudioRecordThread mAudioRecordThread;
     private volatile boolean isRecording = false;
     private File mVideo;
-    private LinkedBlockingQueue<FrameToRecord> mFrameToRecordQueue;
-    private LinkedBlockingQueue<FrameToRecord> mRecycledFrameQueue;
+
+
     private int mFrameToRecordCount;
     private int mFrameRecordedCount;
     private long mTotalProcessFrameTime;
@@ -203,10 +203,8 @@ public class FFmpegRecordActivity extends BaseActivity {
             }
         });
 
-        // At most buffer 10 Frame
-        mFrameToRecordQueue = new LinkedBlockingQueue<>(10);
-        // At most recycle 2 Frame
-        mRecycledFrameQueue = new LinkedBlockingQueue<>(2);
+
+
         mRecordFragments = new Stack<>();
 
 
@@ -288,7 +286,7 @@ public class FFmpegRecordActivity extends BaseActivity {
 
                 long timestamp = 1000 * curRecordedTime;
                 Frame frame;
-                FrameToRecord frameToRecord = mRecycledFrameQueue.poll();
+                FrameToRecord frameToRecord = recordManager.getmRecycledFrameQueue().poll();
                 if (frameToRecord != null) {
                     frame = frameToRecord.getFrame();
                     frameToRecord.setTimestamp(timestamp);
@@ -298,7 +296,7 @@ public class FFmpegRecordActivity extends BaseActivity {
                 }
                 ((ByteBuffer) frame.image[0].position(0)).put(data);
 
-                if (mFrameToRecordQueue.offer(frameToRecord)) {
+                if (recordManager.getmFrameToRecordQueue().offer(frameToRecord)) {
                     mFrameToRecordCount++;
                 }
             }
@@ -378,7 +376,7 @@ public class FFmpegRecordActivity extends BaseActivity {
     private void startRecording() {
         mAudioRecordThread = new AudioRecordThread(sampleAudioRateInHz, onRecordDataListener);
         mAudioRecordThread.start();
-        mVideoRecordThread = new VideoRecordThread(context, frameRate, mFrameToRecordQueue, mRecycledFrameQueue, onRecordDataListener);
+        mVideoRecordThread = new VideoRecordThread(context, frameRate, recordManager.getmFrameToRecordQueue(), recordManager.getmRecycledFrameQueue(), onRecordDataListener);
         if (mVideoRecordThread != null) {
             mVideoRecordThread.setPreviewWidthHeight(mPreviewWidth, mPreviewHeight);
         }
@@ -391,13 +389,11 @@ public class FFmpegRecordActivity extends BaseActivity {
                 mAudioRecordThread.stopRunning();
             }
         }
-
         if (mVideoRecordThread != null) {
             if (mVideoRecordThread.isRunning()) {
                 mVideoRecordThread.stopRunning();
             }
         }
-
         try {
             if (mAudioRecordThread != null) {
                 mAudioRecordThread.join();
@@ -410,10 +406,8 @@ public class FFmpegRecordActivity extends BaseActivity {
         }
         mAudioRecordThread = null;
         mVideoRecordThread = null;
-
-
-        mFrameToRecordQueue.clear();
-        mRecycledFrameQueue.clear();
+        recordManager.getmFrameToRecordQueue().clear();
+        recordManager.getmFrameToRecordQueue().clear();
     }
 
     private void resumeRecording() {
