@@ -26,8 +26,13 @@ public class RecordManager {
     private LinkedBlockingQueue<FrameToRecord> mFrameToRecordQueue;
     private LinkedBlockingQueue<FrameToRecord> mRecycledFrameQueue;
 
+    private VideoRecordThread mVideoRecordThread;
+    private AudioRecordThread mAudioRecordThread;
+
 
     private int mCameraId = Camera.CameraInfo.CAMERA_FACING_FRONT;
+    private int sampleAudioRateInHz = 44100;
+    private int frameRate = 30;
     ;
     private Camera mCamera;
 
@@ -63,37 +68,6 @@ public class RecordManager {
         mFrameToRecordQueue = new LinkedBlockingQueue<>(10);
         // At most recycle 2 Frame
         mRecycledFrameQueue = new LinkedBlockingQueue<>(2);
-    }
-
-    private void stopRecording() {
-//        if (mAudioRecordThread != null) {
-//            if (mAudioRecordThread.isRunning()) {
-//                mAudioRecordThread.stopRunning();
-//            }
-//        }
-//
-//        if (mVideoRecordThread != null) {
-//            if (mVideoRecordThread.isRunning()) {
-//                mVideoRecordThread.stopRunning();
-//            }
-//        }
-//
-//        try {
-//            if (mAudioRecordThread != null) {
-//                mAudioRecordThread.join();
-//            }
-//            if (mVideoRecordThread != null) {
-//                mVideoRecordThread.join();
-//            }
-//        } catch (InterruptedException e) {
-//            e.printStackTrace();
-//        }
-//        mAudioRecordThread = null;
-//        mVideoRecordThread = null;
-
-
-        mFrameToRecordQueue.clear();
-        mRecycledFrameQueue.clear();
     }
 
     @Deprecated
@@ -178,5 +152,52 @@ public class RecordManager {
             ioe.printStackTrace();
         }
         mCamera.startPreview();
+    }
+
+    public void startRecording(int mPreviewWidth,int mPreviewHeight) {
+        mAudioRecordThread = new AudioRecordThread(sampleAudioRateInHz, recordDataListener);
+        mAudioRecordThread.start();
+        mVideoRecordThread = new VideoRecordThread(context, frameRate, mFrameToRecordQueue, mRecycledFrameQueue, recordDataListener);
+        if (mVideoRecordThread != null) {
+            mVideoRecordThread.setPreviewWidthHeight(mPreviewWidth, mPreviewHeight);
+        }
+        mVideoRecordThread.start();
+    }
+
+    public void stopRecording() {
+        if (mAudioRecordThread != null) {
+            if (mAudioRecordThread.isRunning()) {
+                mAudioRecordThread.stopRunning();
+            }
+        }
+        if (mVideoRecordThread != null) {
+            if (mVideoRecordThread.isRunning()) {
+                mVideoRecordThread.stopRunning();
+            }
+        }
+        try {
+            if (mAudioRecordThread != null) {
+                mAudioRecordThread.join();
+            }
+            if (mVideoRecordThread != null) {
+                mVideoRecordThread.join();
+            }
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        mAudioRecordThread = null;
+        mVideoRecordThread = null;
+        mFrameToRecordQueue.clear();
+        mRecycledFrameQueue.clear();
+    }
+
+    @Deprecated
+    public VideoRecordThread getmVideoRecordThread() {
+        return mVideoRecordThread;
+    }
+
+    @Deprecated
+    public AudioRecordThread getmAudioRecordThread() {
+        return mAudioRecordThread;
     }
 }

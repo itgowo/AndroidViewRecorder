@@ -13,10 +13,8 @@ import android.widget.Toast;
 
 import com.itgowo.module.androidrecorder.data.FrameToRecord;
 import com.itgowo.module.androidrecorder.data.RecordFragment;
-import com.itgowo.module.androidrecorder.recorder.AudioRecordThread;
 import com.itgowo.module.androidrecorder.recorder.ProgressDialogTask;
 import com.itgowo.module.androidrecorder.recorder.RecordManager;
-import com.itgowo.module.androidrecorder.recorder.VideoRecordThread;
 import com.itgowo.module.androidrecorder.recorder.onRecordDataListener;
 import com.itgowo.module.androidrecorder.util.CameraHelper;
 
@@ -30,7 +28,6 @@ import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Stack;
-import java.util.concurrent.LinkedBlockingQueue;
 
 public class FFmpegRecordActivity extends BaseActivity {
     private static final String LOG_TAG = FFmpegRecordActivity.class.getSimpleName();
@@ -49,8 +46,8 @@ public class FFmpegRecordActivity extends BaseActivity {
 
 
     private FFmpegFrameRecorder mFrameRecorder;
-    private VideoRecordThread mVideoRecordThread;
-    private AudioRecordThread mAudioRecordThread;
+
+
     private volatile boolean isRecording = false;
     private File mVideo;
 
@@ -178,7 +175,7 @@ public class FFmpegRecordActivity extends BaseActivity {
 
                         recordManager.acquireCamera();
                         recordManager.startPreview(surfaceTexture, mPreviewWidth, mPreviewHeight);
-                        startRecording();
+                        recordManager.startRecording(mPreviewWidth,mPreviewHeight);
                         return null;
                     }
                 }.execute();
@@ -196,13 +193,12 @@ public class FFmpegRecordActivity extends BaseActivity {
                         stopRecorder();
 
                         startRecorder();
-                        startRecording();
+                        recordManager.startRecording(mPreviewWidth,mPreviewHeight);
                         return null;
                     }
                 }.execute();
             }
         });
-
 
 
         mRecordFragments = new Stack<>();
@@ -230,7 +226,7 @@ public class FFmpegRecordActivity extends BaseActivity {
 
     public void onActivityPause() {
         pauseRecording();
-        stopRecording();
+        recordManager.stopRecording();
         recordManager.stopPreview();
         recordManager.releaseCamera();
     }
@@ -251,7 +247,7 @@ public class FFmpegRecordActivity extends BaseActivity {
                     initRecorder();
                     startRecorder();
                 }
-                startRecording();
+                recordManager.startRecording(mPreviewWidth,mPreviewHeight);
                 return null;
             }
         }.execute();
@@ -266,7 +262,7 @@ public class FFmpegRecordActivity extends BaseActivity {
 
         // get video data
         if (isRecording) {
-            if (mAudioRecordThread == null || !mAudioRecordThread.isRunning()) {
+            if (recordManager.getmAudioRecordThread() == null || !recordManager.getmAudioRecordThread().isRunning()) {
                 // wait for AudioRecord to init and start
                 mRecordFragments.peek().setStartTimestamp(System.currentTimeMillis());
             } else {
@@ -373,41 +369,9 @@ public class FFmpegRecordActivity extends BaseActivity {
         });
     }
 
-    private void startRecording() {
-        mAudioRecordThread = new AudioRecordThread(sampleAudioRateInHz, onRecordDataListener);
-        mAudioRecordThread.start();
-        mVideoRecordThread = new VideoRecordThread(context, frameRate, recordManager.getmFrameToRecordQueue(), recordManager.getmRecycledFrameQueue(), onRecordDataListener);
-        if (mVideoRecordThread != null) {
-            mVideoRecordThread.setPreviewWidthHeight(mPreviewWidth, mPreviewHeight);
-        }
-        mVideoRecordThread.start();
-    }
 
     private void stopRecording() {
-        if (mAudioRecordThread != null) {
-            if (mAudioRecordThread.isRunning()) {
-                mAudioRecordThread.stopRunning();
-            }
-        }
-        if (mVideoRecordThread != null) {
-            if (mVideoRecordThread.isRunning()) {
-                mVideoRecordThread.stopRunning();
-            }
-        }
-        try {
-            if (mAudioRecordThread != null) {
-                mAudioRecordThread.join();
-            }
-            if (mVideoRecordThread != null) {
-                mVideoRecordThread.join();
-            }
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-        mAudioRecordThread = null;
-        mVideoRecordThread = null;
-        recordManager.getmFrameToRecordQueue().clear();
-        recordManager.getmFrameToRecordQueue().clear();
+
     }
 
     private void resumeRecording() {
@@ -424,7 +388,7 @@ public class FFmpegRecordActivity extends BaseActivity {
                 }
             });
             isRecording = true;
-            mAudioRecordThread.resumeRecord();
+            recordManager.getmAudioRecordThread().resumeRecord();
         }
     }
 
@@ -439,7 +403,7 @@ public class FFmpegRecordActivity extends BaseActivity {
                 }
             });
             isRecording = false;
-            mAudioRecordThread.pauseRecord();
+            recordManager.getmAudioRecordThread().pauseRecord();
         }
     }
 
