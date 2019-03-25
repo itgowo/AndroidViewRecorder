@@ -2,7 +2,6 @@ package com.itgowo.module.androidrecorder;
 
 import android.content.Context;
 import android.content.Intent;
-import android.graphics.SurfaceTexture;
 import android.hardware.Camera;
 import android.os.Bundle;
 import android.view.View;
@@ -12,38 +11,20 @@ import android.widget.Toast;
 import com.itgowo.module.androidrecorder.recorder.ProgressDialogTask;
 import com.itgowo.module.androidrecorder.recorder.RecordManager;
 import com.itgowo.module.androidrecorder.recorder.onRecordStatusListener;
+import com.itgowo.module.androidrecorder.util.CameraHelper;
 
-import org.bytedeco.javacv.Frame;
-
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.concurrent.Executors;
 
 import static com.itgowo.module.androidrecorder.recorder.RecordManager.MIN_VIDEO_LENGTH;
 
 public class FFmpegRecordActivity extends BaseActivity {
-    private static final String LOG_TAG = FFmpegRecordActivity.class.getSimpleName();
-
-
-    private static final int PREFERRED_PREVIEW_WIDTH = 640;
-    private static final int PREFERRED_PREVIEW_HEIGHT = 480;
-
-    // both in milliseconds
-
     private Button mBtnResumeOrPause;
     private Button mBtnDone;
     private Button mBtnSwitchCamera;
     private Button mBtnReset;
 
-
-    private int sampleAudioRateInHz = 44100;
-    /* The sides of width and height are based on camera orientation.
-    That is, the preview size is the size before it is rotated. */
-
-    // Output video size
-    private int videoWidth = 320;
-    private int videoHeight = 240;
-    private int frameRate = 30;
-    private int frameDepth = Frame.DEPTH_UBYTE;
-    private int frameChannels = 2;
 
     // Workaround for https://code.google.com/p/android/issues/detail?id=190966
 
@@ -63,7 +44,6 @@ public class FFmpegRecordActivity extends BaseActivity {
 
             @Override
             public void onRecordStoped() throws Exception {
-                new FFmpegRecordActivity.FinishRecordingTask(context).execute();
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
@@ -74,7 +54,7 @@ public class FFmpegRecordActivity extends BaseActivity {
 
             @Override
             public void onRecordPrepare() throws Exception {
-
+                System.out.println("FFmpegRecordActivity.onRecordPrepare");
             }
 
             @Override
@@ -107,7 +87,7 @@ public class FFmpegRecordActivity extends BaseActivity {
 
             @Override
             public void onPriviewData(byte[] data, Camera camera) throws Exception {
-                recordManager.previewFrameCamera(data, camera, frameDepth, frameChannels);
+                recordManager.previewFrameCamera(data, camera);
             }
         };
 
@@ -128,7 +108,7 @@ public class FFmpegRecordActivity extends BaseActivity {
             public void onClick(View v) {
                 recordManager.pauseRecorder();
                 // check video length
-                if (recordManager.calculateTotalRecordedTime() < MIN_VIDEO_LENGTH) {
+                if (recordManager.getTime().getTime() < MIN_VIDEO_LENGTH) {
                     Toast.makeText(v.getContext(), R.string.video_too_short, Toast.LENGTH_SHORT).show();
                     return;
                 }
@@ -138,14 +118,11 @@ public class FFmpegRecordActivity extends BaseActivity {
         mBtnSwitchCamera.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                final SurfaceTexture surfaceTexture = recordManager.getmPreview().getSurfaceTexture();
                 new ProgressDialogTask<Void, Integer, Void>(R.string.please_wait, context) {
 
                     @Override
                     protected Void doInBackground(Void... params) {
-
-                        recordManager.switchCamera(surfaceTexture);
-
+                        recordManager.switchCamera();
                         return null;
                     }
                 }.executeOnExecutor(Executors.newCachedThreadPool());
@@ -161,7 +138,8 @@ public class FFmpegRecordActivity extends BaseActivity {
                     protected Void doInBackground(Void... params) {
                         recordManager.stopRecording();
                         recordManager.stopRecording();
-
+//                        String recordedTime = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+                        recordManager.setVideoFile(CameraHelper.getOutputMediaFile("111", CameraHelper.MEDIA_TYPE_VIDEO));
                         recordManager.startRecordPrepare();
                         return null;
                     }
@@ -194,15 +172,13 @@ public class FFmpegRecordActivity extends BaseActivity {
     @Override
     public void doAfterAllPermissionsGranted() {
         recordManager.acquireCamera();
-        SurfaceTexture surfaceTexture = recordManager.getmPreview().getSurfaceTexture();
-        if (surfaceTexture != null) {
-            // SurfaceTexture already created
-            recordManager.startPreview(surfaceTexture);
-        }
+        recordManager.startPreview();
         new ProgressDialogTask<Void, Integer, Void>(R.string.initiating, context) {
 
             @Override
             protected Void doInBackground(Void... params) {
+//                String recordedTime = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+                recordManager.setVideoFile(CameraHelper.getOutputMediaFile("222", CameraHelper.MEDIA_TYPE_VIDEO));
                 recordManager.startRecordPrepare();
                 return null;
             }
