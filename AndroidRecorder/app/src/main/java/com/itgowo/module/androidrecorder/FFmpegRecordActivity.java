@@ -92,7 +92,14 @@ public class FFmpegRecordActivity extends BaseActivity {
 
             @Override
             public void onRecordResume() throws Exception {
-
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        mBtnReset.setVisibility(View.VISIBLE);
+                        mBtnSwitchCamera.setVisibility(View.INVISIBLE);
+                        mBtnResumeOrPause.setText(R.string.pause);
+                    }
+                });
             }
 
             @Override
@@ -220,21 +227,8 @@ public class FFmpegRecordActivity extends BaseActivity {
     }
 
     private void resumeRecording() {
-        if (!recordManager.isRecording()) {
-            RecordFragment recordFragment = new RecordFragment();
-            recordFragment.setStartTimestamp(System.currentTimeMillis());
-            recordManager.getmRecordFragments().push(recordFragment);
-            runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    mBtnReset.setVisibility(View.VISIBLE);
-                    mBtnSwitchCamera.setVisibility(View.INVISIBLE);
-                    mBtnResumeOrPause.setText(R.string.pause);
-                }
-            });
-            recordManager.setRecording(true);
-            recordManager.getmAudioRecordThread().resumeRecord();
-        }
+        recordManager.resumeRecording();
+
     }
 
     private void pauseRecording() {

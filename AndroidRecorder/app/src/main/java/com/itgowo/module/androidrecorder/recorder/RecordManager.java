@@ -5,10 +5,8 @@ import android.graphics.SurfaceTexture;
 import android.hardware.Camera;
 import android.util.Log;
 import android.view.TextureView;
-import android.view.View;
 
 import com.itgowo.module.androidrecorder.FixedRatioCroppedTextureView;
-import com.itgowo.module.androidrecorder.R;
 import com.itgowo.module.androidrecorder.data.FrameToRecord;
 import com.itgowo.module.androidrecorder.data.RecordFragment;
 import com.itgowo.module.androidrecorder.util.CameraHelper;
@@ -269,7 +267,7 @@ public class RecordManager {
         mCamera.startPreview();
     }
 
-    public void startRecording( ) {
+    public void startRecording() {
         mAudioRecordThread = new AudioRecordThread(sampleAudioRateInHz, recordDataListener);
         mAudioRecordThread.start();
         mVideoRecordThread = new VideoRecordThread(context, frameRate, mFrameToRecordQueue, mRecycledFrameQueue, recordDataListener);
@@ -372,8 +370,9 @@ public class RecordManager {
         }
 
     }
-    public void pauseRecorder(){
-        if ( isRecording()) {
+
+    public void pauseRecorder() {
+        if (isRecording()) {
             mRecordFragments.peek().setEndTimestamp(System.currentTimeMillis());
             setRecording(false);
             mAudioRecordThread.pauseRecord();
@@ -384,6 +383,23 @@ public class RecordManager {
             }
         }
     }
+
+    public void resumeRecording() {
+        if (!isRecording()) {
+            RecordFragment recordFragment = new RecordFragment();
+            recordFragment.setStartTimestamp(System.currentTimeMillis());
+            mRecordFragments.push(recordFragment);
+
+            setRecording(true);
+            mAudioRecordThread.resumeRecord();
+            try {
+                recordStatusListener.onRecordResume();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
     public Stack<RecordFragment> getmRecordFragments() {
         return mRecordFragments;
     }
@@ -405,7 +421,7 @@ public class RecordManager {
 
         // get video data
         if (isRecording()) {
-            if (getmAudioRecordThread() == null || !getmAudioRecordThread().isRunning()) {
+            if (mAudioRecordThread == null || !mAudioRecordThread.isRunning()) {
                 // wait for AudioRecord to init and start
                 mRecordFragments.peek().setStartTimestamp(System.currentTimeMillis());
             } else {
@@ -448,13 +464,4 @@ public class RecordManager {
 
     }
 
-    @Deprecated
-    public VideoRecordThread getmVideoRecordThread() {
-        return mVideoRecordThread;
-    }
-
-    @Deprecated
-    public AudioRecordThread getmAudioRecordThread() {
-        return mAudioRecordThread;
-    }
 }
