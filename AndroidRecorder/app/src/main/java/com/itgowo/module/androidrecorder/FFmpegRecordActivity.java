@@ -5,13 +5,10 @@ import android.content.Intent;
 import android.graphics.SurfaceTexture;
 import android.hardware.Camera;
 import android.os.Bundle;
-import android.util.Log;
-import android.view.TextureView;
 import android.view.View;
 import android.widget.Button;
 import android.widget.Toast;
 
-import com.itgowo.module.androidrecorder.data.FrameToRecord;
 import com.itgowo.module.androidrecorder.data.RecordFragment;
 import com.itgowo.module.androidrecorder.recorder.ProgressDialogTask;
 import com.itgowo.module.androidrecorder.recorder.RecordManager;
@@ -19,9 +16,6 @@ import com.itgowo.module.androidrecorder.recorder.onRecordStatusListener;
 
 import org.bytedeco.javacv.Frame;
 
-import java.io.File;
-import java.nio.ByteBuffer;
-import java.util.Stack;
 import java.util.concurrent.Executors;
 
 import static com.itgowo.module.androidrecorder.recorder.RecordManager.MIN_VIDEO_LENGTH;
@@ -41,17 +35,10 @@ public class FFmpegRecordActivity extends BaseActivity {
     private Button mBtnReset;
 
 
-
-
-
-
-
-
     private int sampleAudioRateInHz = 44100;
     /* The sides of width and height are based on camera orientation.
     That is, the preview size is the size before it is rotated. */
-    private int mPreviewWidth = PREFERRED_PREVIEW_WIDTH;
-    private int mPreviewHeight = PREFERRED_PREVIEW_HEIGHT;
+
     // Output video size
     private int videoWidth = 320;
     private int videoHeight = 240;
@@ -94,7 +81,13 @@ public class FFmpegRecordActivity extends BaseActivity {
 
             @Override
             public void onRecordPause() throws Exception {
-                pauseRecording();
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        mBtnSwitchCamera.setVisibility(View.VISIBLE);
+                        mBtnResumeOrPause.setText(R.string.resume);
+                    }
+                });
             }
 
             @Override
@@ -104,34 +97,12 @@ public class FFmpegRecordActivity extends BaseActivity {
 
             @Override
             public void onPriviewData(byte[] data, Camera camera) throws Exception {
-                recordManager.previewFrameCamera(data, camera,mPreviewWidth,mPreviewHeight,frameDepth,frameChannels);
+                recordManager.previewFrameCamera(data, camera, frameDepth, frameChannels);
             }
         };
 
         recordManager = new RecordManager(this, mPreview, onRecordStatusListener);
-        recordManager.getmPreview().setPreviewSize(mPreviewWidth, mPreviewHeight);
-        recordManager.getmPreview().setCroppedSizeWeight(videoWidth, videoHeight);
-        recordManager.getmPreview().setSurfaceTextureListener(new TextureView.SurfaceTextureListener() {
-            @Override
-            public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
-                recordManager.startPreview(surface, mPreviewWidth, mPreviewHeight);
-            }
-
-            @Override
-            public void onSurfaceTextureSizeChanged(SurfaceTexture surface, int width, int height) {
-
-            }
-
-            @Override
-            public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
-                return true;
-            }
-
-            @Override
-            public void onSurfaceTextureUpdated(SurfaceTexture surface) {
-
-            }
-        });
+        recordManager.init();
         mBtnResumeOrPause.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -169,8 +140,8 @@ public class FFmpegRecordActivity extends BaseActivity {
                         recordManager.switchCamera();
 
                         recordManager.acquireCamera();
-                        recordManager.startPreview(surfaceTexture, mPreviewWidth, mPreviewHeight);
-                        recordManager.startRecording(mPreviewWidth, mPreviewHeight);
+                        recordManager.startPreview(surfaceTexture);
+                        recordManager.startRecording();
                         return null;
                     }
                 }.executeOnExecutor(Executors.newCachedThreadPool());
@@ -188,15 +159,12 @@ public class FFmpegRecordActivity extends BaseActivity {
                         recordManager.stopRecorder();
 
                         recordManager.startRecorder();
-                        recordManager.startRecording(mPreviewWidth, mPreviewHeight);
+                        recordManager.startRecording();
                         return null;
                     }
                 }.execute();
             }
         });
-
-
-
 
 
     }
@@ -232,21 +200,19 @@ public class FFmpegRecordActivity extends BaseActivity {
         SurfaceTexture surfaceTexture = recordManager.getmPreview().getSurfaceTexture();
         if (surfaceTexture != null) {
             // SurfaceTexture already created
-            recordManager.startPreview(surfaceTexture, mPreviewWidth, mPreviewHeight);
+            recordManager.startPreview(surfaceTexture);
         }
         new ProgressDialogTask<Void, Integer, Void>(R.string.initiating, context) {
 
             @Override
             protected Void doInBackground(Void... params) {
-                recordManager.initRecorder(videoWidth,videoHeight);
+                recordManager.initRecorder(videoWidth, videoHeight);
                 recordManager.startRecorder();
-                recordManager.startRecording(mPreviewWidth, mPreviewHeight);
+                recordManager.startRecording();
                 return null;
             }
         }.execute();
     }
-
-
 
 
     private void stopRecording() {
@@ -272,21 +238,9 @@ public class FFmpegRecordActivity extends BaseActivity {
     }
 
     private void pauseRecording() {
-        if (recordManager.isRecording()) {
-            recordManager.getmRecordFragments().peek().setEndTimestamp(System.currentTimeMillis());
-            runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    mBtnSwitchCamera.setVisibility(View.VISIBLE);
-                    mBtnResumeOrPause.setText(R.string.resume);
-                }
-            });
-            recordManager.setRecording(false);
-            recordManager.getmAudioRecordThread().pauseRecord();
-        }
+        recordManager.pauseRecorder();
+
     }
-
-
 
 
     class FinishRecordingTask extends ProgressDialogTask<Void, Integer, Void> {
