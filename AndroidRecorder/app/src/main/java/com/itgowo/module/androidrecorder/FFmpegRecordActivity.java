@@ -9,7 +9,6 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.Toast;
 
-import com.itgowo.module.androidrecorder.data.RecordFragment;
 import com.itgowo.module.androidrecorder.recorder.ProgressDialogTask;
 import com.itgowo.module.androidrecorder.recorder.RecordManager;
 import com.itgowo.module.androidrecorder.recorder.onRecordStatusListener;
@@ -62,7 +61,6 @@ public class FFmpegRecordActivity extends BaseActivity {
         mBtnReset = findViewById(R.id.btn_reset);
         onRecordStatusListener = new onRecordStatusListener() {
 
-
             @Override
             public void onRecordStoped() throws Exception {
                 new FFmpegRecordActivity.FinishRecordingTask(context).execute();
@@ -72,6 +70,11 @@ public class FFmpegRecordActivity extends BaseActivity {
                         mBtnReset.setVisibility(View.INVISIBLE);
                     }
                 });
+            }
+
+            @Override
+            public void onRecordPrepare() throws Exception {
+
             }
 
             @Override
@@ -148,7 +151,7 @@ public class FFmpegRecordActivity extends BaseActivity {
 
                         recordManager.acquireCamera();
                         recordManager.startPreview(surfaceTexture);
-                        recordManager.startRecording();
+                        recordManager.startRecordPrepare();
                         return null;
                     }
                 }.executeOnExecutor(Executors.newCachedThreadPool());
@@ -163,9 +166,9 @@ public class FFmpegRecordActivity extends BaseActivity {
                     @Override
                     protected Void doInBackground(Void... params) {
                         stopRecording();
-                        recordManager.stopRecorder();
+                        recordManager.stopRecording();
 
-                        recordManager.startRecording();
+                        recordManager.startRecordPrepare();
                         return null;
                     }
                 }.execute();
@@ -178,7 +181,7 @@ public class FFmpegRecordActivity extends BaseActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        recordManager.stopRecorder();
+        recordManager.stopRecording();
         recordManager.releaseRecorder(true);
     }
 
@@ -212,7 +215,7 @@ public class FFmpegRecordActivity extends BaseActivity {
 
             @Override
             protected Void doInBackground(Void... params) {
-                recordManager.startRecording();
+                recordManager.startRecordPrepare();
                 return null;
             }
         }.execute();
@@ -243,7 +246,7 @@ public class FFmpegRecordActivity extends BaseActivity {
         @Override
         protected Void doInBackground(Void... params) {
             stopRecording();
-            recordManager.stopRecorder();
+            recordManager.stopRecording();
             recordManager.releaseRecorder(false);
             return null;
         }

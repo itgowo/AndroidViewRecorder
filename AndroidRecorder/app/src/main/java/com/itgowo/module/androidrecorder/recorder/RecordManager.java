@@ -267,17 +267,21 @@ public class RecordManager {
         mCamera.startPreview();
     }
 
-    public void startRecording() {
-        startRecorder();
-        mAudioRecordThread = new AudioRecordThread(sampleAudioRateInHz, recordDataListener);
-        mAudioRecordThread.start();
-        mVideoRecordThread = new VideoRecordThread(context, frameRate, mFrameToRecordQueue, mRecycledFrameQueue, recordDataListener);
-        if (mVideoRecordThread != null) {
-            mVideoRecordThread.setPreviewWidthHeight(mPreviewWidth, mPreviewHeight);
-        }
-        mVideoRecordThread.start();
+    /**
+     * 启动录制功能，等价于启动后暂停，isRecording目前为false
+     */
+    public void startRecordPrepare() {
         try {
-            recordStatusListener.onRecordStarted();
+            initRecorder();
+            mFrameRecorder.start();
+            mAudioRecordThread = new AudioRecordThread(sampleAudioRateInHz, recordDataListener);
+            mAudioRecordThread.start();
+            mVideoRecordThread = new VideoRecordThread(context, frameRate, mFrameToRecordQueue, mRecycledFrameQueue, recordDataListener);
+            if (mVideoRecordThread != null) {
+                mVideoRecordThread.setPreviewWidthHeight(mPreviewWidth, mPreviewHeight);
+            }
+            mVideoRecordThread.start();
+            recordStatusListener.onRecordPrepare();
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -308,6 +312,22 @@ public class RecordManager {
         mVideoRecordThread = null;
         mFrameToRecordQueue.clear();
         mRecycledFrameQueue.clear();
+
+
+        if (mFrameRecorder != null) {
+            try {
+                mFrameRecorder.stop();
+            } catch (FFmpegFrameRecorder.Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+        mRecordFragments.clear();
+        try {
+            recordStatusListener.onRecordStoped();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     public void initRecorder() {
@@ -342,32 +362,6 @@ public class RecordManager {
      * 只有在未录制情况下可以启动，暂停状态下不能start
      */
     private void startRecorder() {
-        if (isRecording()) {
-            return;
-        }
-        initRecorder();
-        try {
-            mFrameRecorder.start();
-        } catch (FFmpegFrameRecorder.Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    public void stopRecorder() {
-        if (mFrameRecorder != null) {
-            try {
-                mFrameRecorder.stop();
-            } catch (FFmpegFrameRecorder.Exception e) {
-                e.printStackTrace();
-            }
-        }
-
-        mRecordFragments.clear();
-        try {
-            recordStatusListener.onRecordStoped();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
 
     }
 
@@ -388,9 +382,8 @@ public class RecordManager {
         if (!isRecording()) {
             RecordFragment recordFragment = new RecordFragment();
             recordFragment.setStartTimestamp(System.currentTimeMillis());
-            mRecordFragments.push(recordFragment);
-
             setRecording(true);
+            mRecordFragments.push(recordFragment);
             mAudioRecordThread.resumeRecord();
             try {
                 recordStatusListener.onRecordResume();

@@ -6,6 +6,8 @@ public interface onRecordStatusListener {
 
     void onRecordStoped() throws Exception;
 
+    void onRecordPrepare() throws Exception;
+
     void onRecordStarted() throws Exception;
 
     void onRecordPause() throws Exception;

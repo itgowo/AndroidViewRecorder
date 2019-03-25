@@ -29,7 +29,7 @@ public class AudioRecordThread extends BaseRecordThread {
     public void run() {
         android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_AUDIO);
         setName("AudioRecordThread");
-        Log.d(TAG, "mAudioRecord startRecording");
+        Log.d(TAG, "mAudioRecord startRecordPrepare");
         mAudioRecord.startRecording();
 
         isRunning = true;
