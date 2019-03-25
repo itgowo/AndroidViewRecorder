@@ -24,6 +24,8 @@ import java.nio.ByteBuffer;
 import java.util.Stack;
 import java.util.concurrent.Executors;
 
+import static com.itgowo.module.androidrecorder.recorder.RecordManager.MIN_VIDEO_LENGTH;
+
 public class FFmpegRecordActivity extends BaseActivity {
     private static final String LOG_TAG = FFmpegRecordActivity.class.getSimpleName();
 
@@ -32,8 +34,7 @@ public class FFmpegRecordActivity extends BaseActivity {
     private static final int PREFERRED_PREVIEW_HEIGHT = 480;
 
     // both in milliseconds
-    private static final long MIN_VIDEO_LENGTH = 1 * 1000;
-    private static final long MAX_VIDEO_LENGTH = 90 * 1000;
+
     private Button mBtnResumeOrPause;
     private Button mBtnDone;
     private Button mBtnSwitchCamera;
@@ -43,9 +44,7 @@ public class FFmpegRecordActivity extends BaseActivity {
 
 
 
-    private int mFrameToRecordCount;
-    private int mFrameRecordedCount;
-    private long mTotalProcessFrameTime;
+
 
 
     private int sampleAudioRateInHz = 44100;
@@ -59,7 +58,7 @@ public class FFmpegRecordActivity extends BaseActivity {
     private int frameRate = 30;
     private int frameDepth = Frame.DEPTH_UBYTE;
     private int frameChannels = 2;
-    private long lastPreviewFrameTime;
+
     // Workaround for https://code.google.com/p/android/issues/detail?id=190966
 
     private onRecordStatusListener onRecordStatusListener;
@@ -79,6 +78,7 @@ public class FFmpegRecordActivity extends BaseActivity {
 
             @Override
             public void onRecordStoped() throws Exception {
+                new FFmpegRecordActivity.FinishRecordingTask(context).execute();
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
@@ -94,7 +94,7 @@ public class FFmpegRecordActivity extends BaseActivity {
 
             @Override
             public void onRecordPause() throws Exception {
-
+                pauseRecording();
             }
 
             @Override
@@ -104,7 +104,7 @@ public class FFmpegRecordActivity extends BaseActivity {
 
             @Override
             public void onPriviewData(byte[] data, Camera camera) throws Exception {
-                previewFrameCamera(data, camera);
+                recordManager.previewFrameCamera(data, camera,mPreviewWidth,mPreviewHeight,frameDepth,frameChannels);
             }
         };
 
@@ -147,7 +147,7 @@ public class FFmpegRecordActivity extends BaseActivity {
             public void onClick(View v) {
                 pauseRecording();
                 // check video length
-                if (calculateTotalRecordedTime(recordManager.getmRecordFragments()) < MIN_VIDEO_LENGTH) {
+                if (recordManager.calculateTotalRecordedTime() < MIN_VIDEO_LENGTH) {
                     Toast.makeText(v.getContext(), R.string.video_too_short, Toast.LENGTH_SHORT).show();
                     return;
                 }
@@ -246,53 +246,7 @@ public class FFmpegRecordActivity extends BaseActivity {
         }.execute();
     }
 
-    private void previewFrameCamera(byte[] data, Camera camera) {
-        long thisPreviewFrameTime = System.currentTimeMillis();
-        if (lastPreviewFrameTime > 0) {
-            Log.d(LOG_TAG, "Preview frame interval: " + (thisPreviewFrameTime - lastPreviewFrameTime) + "ms");
-        }
-        lastPreviewFrameTime = thisPreviewFrameTime;
 
-        // get video data
-        if (recordManager.isRecording()) {
-            if (recordManager.getmAudioRecordThread() == null || !recordManager.getmAudioRecordThread().isRunning()) {
-                // wait for AudioRecord to init and start
-                recordManager.getmRecordFragments().peek().setStartTimestamp(System.currentTimeMillis());
-            } else {
-                // pop the current record fragment when calculate total recorded time
-                RecordFragment curFragment = recordManager.getmRecordFragments().pop();
-                long recordedTime = calculateTotalRecordedTime(recordManager.getmRecordFragments());
-                // push it back after calculation
-                recordManager.getmRecordFragments().push(curFragment);
-                long curRecordedTime = System.currentTimeMillis()
-                        - curFragment.getStartTimestamp() + recordedTime;
-                // check if exceeds time limit
-                if (curRecordedTime > MAX_VIDEO_LENGTH) {
-                    pauseRecording();
-                    new FinishRecordingTask(context).execute();
-                    return;
-                }
-
-                long timestamp = 1000 * curRecordedTime;
-                Frame frame;
-                FrameToRecord frameToRecord = recordManager.getmRecycledFrameQueue().poll();
-                if (frameToRecord != null) {
-                    frame = frameToRecord.getFrame();
-                    frameToRecord.setTimestamp(timestamp);
-                } else {
-                    frame = new Frame(mPreviewWidth, mPreviewHeight, frameDepth, frameChannels);
-                    frameToRecord = new FrameToRecord(timestamp, frame);
-                }
-                ((ByteBuffer) frame.image[0].position(0)).put(data);
-
-                if (recordManager.getmFrameToRecordQueue().offer(frameToRecord)) {
-                    mFrameToRecordCount++;
-                }
-            }
-        }
-        recordManager.getmCamera().addCallbackBuffer(data);
-
-    }
 
 
     private void stopRecording() {
@@ -332,13 +286,7 @@ public class FFmpegRecordActivity extends BaseActivity {
         }
     }
 
-    private long calculateTotalRecordedTime(Stack<RecordFragment> recordFragments) {
-        long recordedTime = 0;
-        for (RecordFragment recordFragment : recordFragments) {
-            recordedTime += recordFragment.getDuration();
-        }
-        return recordedTime;
-    }
+
 
 
     class FinishRecordingTask extends ProgressDialogTask<Void, Integer, Void> {

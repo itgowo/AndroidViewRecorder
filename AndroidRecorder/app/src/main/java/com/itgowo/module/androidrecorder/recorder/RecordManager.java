@@ -6,6 +6,7 @@ import android.hardware.Camera;
 import android.util.Log;
 import android.view.View;
 
+import com.itgowo.module.androidrecorder.FFmpegRecordActivity;
 import com.itgowo.module.androidrecorder.FixedRatioCroppedTextureView;
 import com.itgowo.module.androidrecorder.data.FrameToRecord;
 import com.itgowo.module.androidrecorder.data.RecordFragment;
@@ -20,6 +21,7 @@ import org.bytedeco.javacv.FrameRecorder;
 import java.io.File;
 import java.io.IOException;
 import java.nio.Buffer;
+import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
@@ -30,6 +32,8 @@ public class RecordManager {
     private static final int PREFERRED_PREVIEW_WIDTH = 640;
     private static final int PREFERRED_PREVIEW_HEIGHT = 480;
     private static final String TAG = "RecordManager";
+    public static final long MIN_VIDEO_LENGTH = 1 * 1000;
+    public static final long MAX_VIDEO_LENGTH = 90 * 1000;
 
     private Activity context;
     private FixedRatioCroppedTextureView mPreview;
@@ -45,7 +49,10 @@ public class RecordManager {
     private AudioRecordThread mAudioRecordThread;
     private FFmpegFrameRecorder mFrameRecorder;
 
-
+    private int mFrameToRecordCount;
+    private int mFrameRecordedCount;
+    private long mTotalProcessFrameTime;
+    private long lastPreviewFrameTime;
     private int mCameraId = Camera.CameraInfo.CAMERA_FACING_FRONT;
     private int sampleAudioRateInHz = 44100;
     private int frameRate = 30;
@@ -338,7 +345,64 @@ public class RecordManager {
     public Stack<RecordFragment> getmRecordFragments() {
         return mRecordFragments;
     }
+    public long calculateTotalRecordedTime() {
+        long recordedTime = 0;
+        for (RecordFragment recordFragment : mRecordFragments) {
+            recordedTime += recordFragment.getDuration();
+        }
+        return recordedTime;
+    }
+    public void previewFrameCamera(byte[] data, Camera camera,int mPreviewWidth,int mPreviewHeight,int frameDepth,int frameChannels) {
+        long thisPreviewFrameTime = System.currentTimeMillis();
+        if (lastPreviewFrameTime > 0) {
+            Log.d(TAG, "Preview frame interval: " + (thisPreviewFrameTime - lastPreviewFrameTime) + "ms");
+        }
+        lastPreviewFrameTime = thisPreviewFrameTime;
 
+        // get video data
+        if ( isRecording()) {
+            if ( getmAudioRecordThread() == null || ! getmAudioRecordThread().isRunning()) {
+                // wait for AudioRecord to init and start
+                mRecordFragments.peek().setStartTimestamp(System.currentTimeMillis());
+            } else {
+                // pop the current record fragment when calculate total recorded time
+                RecordFragment curFragment =  mRecordFragments.pop();
+                long recordedTime = calculateTotalRecordedTime(  );
+                // push it back after calculation
+                mRecordFragments.push(curFragment);
+                long curRecordedTime = System.currentTimeMillis()
+                        - curFragment.getStartTimestamp() + recordedTime;
+                // check if exceeds time limit
+                if (curRecordedTime > MAX_VIDEO_LENGTH) {
+                    try {
+                        recordStatusListener.onRecordStoped();
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+
+                    return;
+                }
+
+                long timestamp = 1000 * curRecordedTime;
+                Frame frame;
+                FrameToRecord frameToRecord = mRecycledFrameQueue.poll();
+                if (frameToRecord != null) {
+                    frame = frameToRecord.getFrame();
+                    frameToRecord.setTimestamp(timestamp);
+                } else {
+                    frame = new Frame(mPreviewWidth, mPreviewHeight, frameDepth, frameChannels);
+                    frameToRecord = new FrameToRecord(timestamp, frame);
+                }
+                ((ByteBuffer) frame.image[0].position(0)).put(data);
+
+                if (mFrameToRecordQueue.offer(frameToRecord)) {
+                    mFrameToRecordCount++;
+                }
+            }
+        }
+       mCamera.addCallbackBuffer(data);
+
+    }
     @Deprecated
     public VideoRecordThread getmVideoRecordThread() {
         return mVideoRecordThread;
