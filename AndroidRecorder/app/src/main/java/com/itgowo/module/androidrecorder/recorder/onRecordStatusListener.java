@@ -12,5 +12,6 @@ public interface onRecordStatusListener {
 
     void onRecordResume() throws Exception;
 
+    void onPriviewData(byte[] data, Camera camera) throws Exception;
 
 }

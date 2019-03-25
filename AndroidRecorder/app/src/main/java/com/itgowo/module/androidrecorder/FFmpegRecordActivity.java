@@ -15,19 +15,14 @@ import com.itgowo.module.androidrecorder.data.FrameToRecord;
 import com.itgowo.module.androidrecorder.data.RecordFragment;
 import com.itgowo.module.androidrecorder.recorder.ProgressDialogTask;
 import com.itgowo.module.androidrecorder.recorder.RecordManager;
-import com.itgowo.module.androidrecorder.recorder.onRecordDataListener;
-import com.itgowo.module.androidrecorder.util.CameraHelper;
+import com.itgowo.module.androidrecorder.recorder.onRecordStatusListener;
 
-import org.bytedeco.javacpp.avcodec;
-import org.bytedeco.javacv.FFmpegFrameRecorder;
 import org.bytedeco.javacv.Frame;
 
 import java.io.File;
-import java.nio.Buffer;
 import java.nio.ByteBuffer;
-import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.Stack;
+import java.util.concurrent.Executors;
 
 public class FFmpegRecordActivity extends BaseActivity {
     private static final String LOG_TAG = FFmpegRecordActivity.class.getSimpleName();
@@ -45,17 +40,13 @@ public class FFmpegRecordActivity extends BaseActivity {
     private Button mBtnReset;
 
 
-    private FFmpegFrameRecorder mFrameRecorder;
 
-
-    private volatile boolean isRecording = false;
-    private File mVideo;
 
 
     private int mFrameToRecordCount;
     private int mFrameRecordedCount;
     private long mTotalProcessFrameTime;
-    private Stack<RecordFragment> mRecordFragments;
+
 
     private int sampleAudioRateInHz = 44100;
     /* The sides of width and height are based on camera orientation.
@@ -71,7 +62,7 @@ public class FFmpegRecordActivity extends BaseActivity {
     private long lastPreviewFrameTime;
     // Workaround for https://code.google.com/p/android/issues/detail?id=190966
 
-    private onRecordDataListener onRecordDataListener;
+    private onRecordStatusListener onRecordStatusListener;
     private RecordManager recordManager;
 
     @Override
@@ -83,28 +74,32 @@ public class FFmpegRecordActivity extends BaseActivity {
         mBtnDone = findViewById(R.id.btn_done);
         mBtnSwitchCamera = findViewById(R.id.btn_switch_camera);
         mBtnReset = findViewById(R.id.btn_reset);
-        onRecordDataListener = new onRecordDataListener() {
-            @Override
-            public void onRecordAudioData(Buffer... data) throws FFmpegFrameRecorder.Exception {
-                if (mFrameRecorder != null) {
-                    mFrameRecorder.recordSamples(data);
-                }
-            }
+        onRecordStatusListener = new onRecordStatusListener() {
+
 
             @Override
-            public void onRecordVideoData(Frame d) throws FFmpegFrameRecorder.Exception {
-                if (mFrameRecorder != null) {
-                    mFrameRecorder.record(d);
-                }
-            }
-
-            @Override
-            public void onRecordTimestamp(long timestamp) throws Exception {
-                if (mFrameRecorder != null) {
-                    if (timestamp > mFrameRecorder.getTimestamp()) {
-                        mFrameRecorder.setTimestamp(timestamp);
+            public void onRecordStoped() throws Exception {
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        mBtnReset.setVisibility(View.INVISIBLE);
                     }
-                }
+                });
+            }
+
+            @Override
+            public void onRecordStarted() throws Exception {
+
+            }
+
+            @Override
+            public void onRecordPause() throws Exception {
+
+            }
+
+            @Override
+            public void onRecordResume() throws Exception {
+
             }
 
             @Override
@@ -113,7 +108,7 @@ public class FFmpegRecordActivity extends BaseActivity {
             }
         };
 
-        recordManager = new RecordManager(this, mPreview, onRecordDataListener);
+        recordManager = new RecordManager(this, mPreview, onRecordStatusListener);
         recordManager.getmPreview().setPreviewSize(mPreviewWidth, mPreviewHeight);
         recordManager.getmPreview().setCroppedSizeWeight(videoWidth, videoHeight);
         recordManager.getmPreview().setSurfaceTextureListener(new TextureView.SurfaceTextureListener() {
@@ -140,7 +135,7 @@ public class FFmpegRecordActivity extends BaseActivity {
         mBtnResumeOrPause.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if (isRecording) {
+                if (recordManager.isRecording()) {
                     pauseRecording();
                 } else {
                     resumeRecording();
@@ -152,7 +147,7 @@ public class FFmpegRecordActivity extends BaseActivity {
             public void onClick(View v) {
                 pauseRecording();
                 // check video length
-                if (calculateTotalRecordedTime(mRecordFragments) < MIN_VIDEO_LENGTH) {
+                if (calculateTotalRecordedTime(recordManager.getmRecordFragments()) < MIN_VIDEO_LENGTH) {
                     Toast.makeText(v.getContext(), R.string.video_too_short, Toast.LENGTH_SHORT).show();
                     return;
                 }
@@ -175,10 +170,10 @@ public class FFmpegRecordActivity extends BaseActivity {
 
                         recordManager.acquireCamera();
                         recordManager.startPreview(surfaceTexture, mPreviewWidth, mPreviewHeight);
-                        recordManager.startRecording(mPreviewWidth,mPreviewHeight);
+                        recordManager.startRecording(mPreviewWidth, mPreviewHeight);
                         return null;
                     }
-                }.execute();
+                }.executeOnExecutor(Executors.newCachedThreadPool());
             }
         });
         mBtnReset.setOnClickListener(new View.OnClickListener() {
@@ -190,10 +185,10 @@ public class FFmpegRecordActivity extends BaseActivity {
                     @Override
                     protected Void doInBackground(Void... params) {
                         stopRecording();
-                        stopRecorder();
+                        recordManager.stopRecorder();
 
-                        startRecorder();
-                        recordManager.startRecording(mPreviewWidth,mPreviewHeight);
+                        recordManager.startRecorder();
+                        recordManager.startRecording(mPreviewWidth, mPreviewHeight);
                         return null;
                     }
                 }.execute();
@@ -201,7 +196,7 @@ public class FFmpegRecordActivity extends BaseActivity {
         });
 
 
-        mRecordFragments = new Stack<>();
+
 
 
     }
@@ -209,8 +204,8 @@ public class FFmpegRecordActivity extends BaseActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        stopRecorder();
-        releaseRecorder(true);
+        recordManager.stopRecorder();
+        recordManager.releaseRecorder(true);
     }
 
 
@@ -243,11 +238,9 @@ public class FFmpegRecordActivity extends BaseActivity {
 
             @Override
             protected Void doInBackground(Void... params) {
-                if (mFrameRecorder == null) {
-                    initRecorder();
-                    startRecorder();
-                }
-                recordManager.startRecording(mPreviewWidth,mPreviewHeight);
+                recordManager.initRecorder(videoWidth,videoHeight);
+                recordManager.startRecorder();
+                recordManager.startRecording(mPreviewWidth, mPreviewHeight);
                 return null;
             }
         }.execute();
@@ -261,16 +254,16 @@ public class FFmpegRecordActivity extends BaseActivity {
         lastPreviewFrameTime = thisPreviewFrameTime;
 
         // get video data
-        if (isRecording) {
+        if (recordManager.isRecording()) {
             if (recordManager.getmAudioRecordThread() == null || !recordManager.getmAudioRecordThread().isRunning()) {
                 // wait for AudioRecord to init and start
-                mRecordFragments.peek().setStartTimestamp(System.currentTimeMillis());
+                recordManager.getmRecordFragments().peek().setStartTimestamp(System.currentTimeMillis());
             } else {
                 // pop the current record fragment when calculate total recorded time
-                RecordFragment curFragment = mRecordFragments.pop();
-                long recordedTime = calculateTotalRecordedTime(mRecordFragments);
+                RecordFragment curFragment = recordManager.getmRecordFragments().pop();
+                long recordedTime = calculateTotalRecordedTime(recordManager.getmRecordFragments());
                 // push it back after calculation
-                mRecordFragments.push(curFragment);
+                recordManager.getmRecordFragments().push(curFragment);
                 long curRecordedTime = System.currentTimeMillis()
                         - curFragment.getStartTimestamp() + recordedTime;
                 // check if exceeds time limit
@@ -301,84 +294,16 @@ public class FFmpegRecordActivity extends BaseActivity {
 
     }
 
-    private void initRecorder() {
-        Log.i(LOG_TAG, "init mFrameRecorder");
-
-        String recordedTime = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
-        mVideo = CameraHelper.getOutputMediaFile(recordedTime, CameraHelper.MEDIA_TYPE_VIDEO);
-        Log.i(LOG_TAG, "Output Video: " + mVideo);
-
-        mFrameRecorder = new FFmpegFrameRecorder(mVideo, videoWidth, videoHeight, 1);
-        mFrameRecorder.setFormat("mp4");
-        mFrameRecorder.setSampleRate(sampleAudioRateInHz);
-        mFrameRecorder.setFrameRate(frameRate);
-
-        // Use H264
-        mFrameRecorder.setVideoCodec(avcodec.AV_CODEC_ID_H264);
-        // See: https://trac.ffmpeg.org/wiki/Encode/H.264#crf
-        /*
-         * The range of the quantizer scale is 0-51: where 0 is lossless, 23 is default, and 51 is worst possible. A lower value is a higher quality and a subjectively sane range is 18-28. Consider 18 to be visually lossless or nearly so: it should look the same or nearly the same as the input but it isn't technically lossless.
-         * The range is exponential, so increasing the CRF value +6 is roughly half the bitrate while -6 is roughly twice the bitrate. General usage is to choose the highest CRF value that still provides an acceptable quality. If the output looks good, then try a higher value and if it looks bad then choose a lower value.
-         */
-        mFrameRecorder.setVideoOption("crf", "28");
-        mFrameRecorder.setVideoOption("preset", "superfast");
-        mFrameRecorder.setVideoOption("tune", "zerolatency");
-
-        Log.i(LOG_TAG, "mFrameRecorder initialize success");
-    }
-
-    private void releaseRecorder(boolean deleteFile) {
-        if (mFrameRecorder != null) {
-            try {
-                mFrameRecorder.release();
-            } catch (FFmpegFrameRecorder.Exception e) {
-                e.printStackTrace();
-            }
-            mFrameRecorder = null;
-
-            if (deleteFile) {
-                mVideo.delete();
-            }
-        }
-    }
-
-    private void startRecorder() {
-        try {
-            mFrameRecorder.start();
-        } catch (FFmpegFrameRecorder.Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void stopRecorder() {
-        if (mFrameRecorder != null) {
-            try {
-                mFrameRecorder.stop();
-            } catch (FFmpegFrameRecorder.Exception e) {
-                e.printStackTrace();
-            }
-        }
-
-        mRecordFragments.clear();
-
-        runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                mBtnReset.setVisibility(View.INVISIBLE);
-            }
-        });
-    }
-
 
     private void stopRecording() {
 
     }
 
     private void resumeRecording() {
-        if (!isRecording) {
+        if (!recordManager.isRecording()) {
             RecordFragment recordFragment = new RecordFragment();
             recordFragment.setStartTimestamp(System.currentTimeMillis());
-            mRecordFragments.push(recordFragment);
+            recordManager.getmRecordFragments().push(recordFragment);
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
@@ -387,14 +312,14 @@ public class FFmpegRecordActivity extends BaseActivity {
                     mBtnResumeOrPause.setText(R.string.pause);
                 }
             });
-            isRecording = true;
+            recordManager.setRecording(true);
             recordManager.getmAudioRecordThread().resumeRecord();
         }
     }
 
     private void pauseRecording() {
-        if (isRecording) {
-            mRecordFragments.peek().setEndTimestamp(System.currentTimeMillis());
+        if (recordManager.isRecording()) {
+            recordManager.getmRecordFragments().peek().setEndTimestamp(System.currentTimeMillis());
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
@@ -402,7 +327,7 @@ public class FFmpegRecordActivity extends BaseActivity {
                     mBtnResumeOrPause.setText(R.string.resume);
                 }
             });
-            isRecording = false;
+            recordManager.setRecording(false);
             recordManager.getmAudioRecordThread().pauseRecord();
         }
     }
@@ -425,8 +350,8 @@ public class FFmpegRecordActivity extends BaseActivity {
         @Override
         protected Void doInBackground(Void... params) {
             stopRecording();
-            stopRecorder();
-            releaseRecorder(false);
+            recordManager.stopRecorder();
+            recordManager.releaseRecorder(false);
             return null;
         }
 
@@ -435,7 +360,7 @@ public class FFmpegRecordActivity extends BaseActivity {
             super.onPostExecute(aVoid);
 
             Intent intent = new Intent(FFmpegRecordActivity.this, PlaybackActivity.class);
-            intent.putExtra(PlaybackActivity.INTENT_NAME_VIDEO_PATH, mVideo.getPath());
+            intent.putExtra(PlaybackActivity.INTENT_NAME_VIDEO_PATH, recordManager.getmVideo().getPath());
             startActivity(intent);
         }
     }
