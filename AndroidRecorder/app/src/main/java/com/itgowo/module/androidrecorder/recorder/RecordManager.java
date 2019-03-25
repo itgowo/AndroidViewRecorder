@@ -65,13 +65,6 @@ public class RecordManager {
 
     private Camera mCamera;
 
-    public int getmCameraId() {
-        return mCameraId;
-    }
-
-    public Camera getmCamera() {
-        return mCamera;
-    }
 
     public boolean isRecording() {
         return isRecording;
@@ -194,8 +187,14 @@ public class RecordManager {
         return mRecycledFrameQueue;
     }
 
-    public void switchCamera() {
+    public void switchCamera(SurfaceTexture surfaceTexture) {
         mCameraId = (mCameraId + 1) % 2;
+        stopRecording();
+        stopPreview();
+        releaseCamera();
+        acquireCamera();
+        startPreview(surfaceTexture);
+        startRecordPrepare();
     }
 
     public FixedRatioCroppedTextureView getmPreview() {
@@ -265,6 +264,13 @@ public class RecordManager {
             ioe.printStackTrace();
         }
         mCamera.startPreview();
+    }
+
+    public void onActivityPause() {
+        pauseRecorder();
+        stopRecording();
+        stopPreview();
+        releaseCamera();
     }
 
     /**

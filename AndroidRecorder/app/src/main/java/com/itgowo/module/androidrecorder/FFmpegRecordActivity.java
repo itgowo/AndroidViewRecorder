@@ -117,16 +117,16 @@ public class FFmpegRecordActivity extends BaseActivity {
             @Override
             public void onClick(View v) {
                 if (recordManager.isRecording()) {
-                    pauseRecording();
+                    recordManager.pauseRecorder();
                 } else {
-                    resumeRecording();
+                    recordManager.resumeRecording();
                 }
             }
         });
         mBtnDone.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                pauseRecording();
+                recordManager.pauseRecorder();
                 // check video length
                 if (recordManager.calculateTotalRecordedTime() < MIN_VIDEO_LENGTH) {
                     Toast.makeText(v.getContext(), R.string.video_too_short, Toast.LENGTH_SHORT).show();
@@ -143,15 +143,9 @@ public class FFmpegRecordActivity extends BaseActivity {
 
                     @Override
                     protected Void doInBackground(Void... params) {
-                        stopRecording();
-                        recordManager.stopPreview();
-                        recordManager.releaseCamera();
 
-                        recordManager.switchCamera();
+                        recordManager.switchCamera(surfaceTexture);
 
-                        recordManager.acquireCamera();
-                        recordManager.startPreview(surfaceTexture);
-                        recordManager.startRecordPrepare();
                         return null;
                     }
                 }.executeOnExecutor(Executors.newCachedThreadPool());
@@ -160,12 +154,12 @@ public class FFmpegRecordActivity extends BaseActivity {
         mBtnReset.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                pauseRecording();
+                recordManager.pauseRecorder();
                 new ProgressDialogTask<Void, Integer, Void>(R.string.please_wait, context) {
 
                     @Override
                     protected Void doInBackground(Void... params) {
-                        stopRecording();
+                        recordManager.stopRecording();
                         recordManager.stopRecording();
 
                         recordManager.startRecordPrepare();
@@ -193,15 +187,9 @@ public class FFmpegRecordActivity extends BaseActivity {
     @Override
     protected void onPause() {
         super.onPause();
-        onActivityPause();
+        recordManager.onActivityPause();
     }
 
-    public void onActivityPause() {
-        pauseRecording();
-        recordManager.stopRecording();
-        recordManager.stopPreview();
-        recordManager.releaseCamera();
-    }
 
     @Override
     public void doAfterAllPermissionsGranted() {
@@ -222,21 +210,6 @@ public class FFmpegRecordActivity extends BaseActivity {
     }
 
 
-    private void stopRecording() {
-
-    }
-
-    private void resumeRecording() {
-        recordManager.resumeRecording();
-
-    }
-
-    private void pauseRecording() {
-        recordManager.pauseRecorder();
-
-    }
-
-
     class FinishRecordingTask extends ProgressDialogTask<Void, Integer, Void> {
 
         public FinishRecordingTask(Context context) {
@@ -245,7 +218,7 @@ public class FFmpegRecordActivity extends BaseActivity {
 
         @Override
         protected Void doInBackground(Void... params) {
-            stopRecording();
+            recordManager.stopRecording();
             recordManager.stopRecording();
             recordManager.releaseRecorder(false);
             return null;
