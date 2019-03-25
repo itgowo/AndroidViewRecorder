@@ -268,6 +268,7 @@ public class RecordManager {
     }
 
     public void startRecording() {
+        startRecorder();
         mAudioRecordThread = new AudioRecordThread(sampleAudioRateInHz, recordDataListener);
         mAudioRecordThread.start();
         mVideoRecordThread = new VideoRecordThread(context, frameRate, mFrameToRecordQueue, mRecycledFrameQueue, recordDataListener);
@@ -275,6 +276,11 @@ public class RecordManager {
             mVideoRecordThread.setPreviewWidthHeight(mPreviewWidth, mPreviewHeight);
         }
         mVideoRecordThread.start();
+        try {
+            recordStatusListener.onRecordStarted();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     public void stopRecording() {
@@ -304,30 +310,17 @@ public class RecordManager {
         mRecycledFrameQueue.clear();
     }
 
-    public void initRecorder(int videoWidth, int videoHeight) {
-        Log.i(TAG, "init mFrameRecorder");
-
+    public void initRecorder() {
         String recordedTime = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
         mVideo = CameraHelper.getOutputMediaFile(recordedTime, CameraHelper.MEDIA_TYPE_VIDEO);
-        Log.i(TAG, "Output Video: " + mVideo);
-
         mFrameRecorder = new FFmpegFrameRecorder(mVideo, videoWidth, videoHeight, 1);
         mFrameRecorder.setFormat("mp4");
         mFrameRecorder.setSampleRate(sampleAudioRateInHz);
         mFrameRecorder.setFrameRate(frameRate);
-
-        // Use H264
         mFrameRecorder.setVideoCodec(avcodec.AV_CODEC_ID_H264);
-        // See: https://trac.ffmpeg.org/wiki/Encode/H.264#crf
-        /*
-         * The range of the quantizer scale is 0-51: where 0 is lossless, 23 is default, and 51 is worst possible. A lower value is a higher quality and a subjectively sane range is 18-28. Consider 18 to be visually lossless or nearly so: it should look the same or nearly the same as the input but it isn't technically lossless.
-         * The range is exponential, so increasing the CRF value +6 is roughly half the bitrate while -6 is roughly twice the bitrate. General usage is to choose the highest CRF value that still provides an acceptable quality. If the output looks good, then try a higher value and if it looks bad then choose a lower value.
-         */
         mFrameRecorder.setVideoOption("crf", "28");
         mFrameRecorder.setVideoOption("preset", "superfast");
         mFrameRecorder.setVideoOption("tune", "zerolatency");
-
-        Log.i(TAG, "mFrameRecorder initialize success");
     }
 
     public void releaseRecorder(boolean deleteFile) {
@@ -345,7 +338,14 @@ public class RecordManager {
         }
     }
 
-    public void startRecorder() {
+    /**
+     * 只有在未录制情况下可以启动，暂停状态下不能start
+     */
+    private void startRecorder() {
+        if (isRecording()) {
+            return;
+        }
+        initRecorder();
         try {
             mFrameRecorder.start();
         } catch (FFmpegFrameRecorder.Exception e) {
@@ -398,10 +398,6 @@ public class RecordManager {
                 e.printStackTrace();
             }
         }
-    }
-
-    public Stack<RecordFragment> getmRecordFragments() {
-        return mRecordFragments;
     }
 
     public long calculateTotalRecordedTime() {

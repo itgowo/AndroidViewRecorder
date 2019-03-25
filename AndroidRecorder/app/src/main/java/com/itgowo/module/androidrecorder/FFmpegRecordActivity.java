@@ -165,7 +165,6 @@ public class FFmpegRecordActivity extends BaseActivity {
                         stopRecording();
                         recordManager.stopRecorder();
 
-                        recordManager.startRecorder();
                         recordManager.startRecording();
                         return null;
                     }
@@ -213,8 +212,6 @@ public class FFmpegRecordActivity extends BaseActivity {
 
             @Override
             protected Void doInBackground(Void... params) {
-                recordManager.initRecorder(videoWidth, videoHeight);
-                recordManager.startRecorder();
                 recordManager.startRecording();
                 return null;
             }
