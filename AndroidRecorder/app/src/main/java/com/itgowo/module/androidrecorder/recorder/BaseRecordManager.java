@@ -22,10 +22,10 @@ import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.concurrent.LinkedBlockingQueue;
 
-public class RecordManager {
+public class BaseRecordManager {
     private static final int PREFERRED_PREVIEW_WIDTH = 640;
     private static final int PREFERRED_PREVIEW_HEIGHT = 480;
-    private static final String TAG = "RecordManager";
+    private static final String TAG = "BaseRecordManager";
     public static final long MIN_VIDEO_LENGTH = 1 * 1000;
     public static final long MAX_VIDEO_LENGTH = 90 * 1000;
 
@@ -67,7 +67,7 @@ public class RecordManager {
         return isRecording;
     }
 
-    public RecordManager setRecording(boolean recording) {
+    public BaseRecordManager setRecording(boolean recording) {
         isRecording = recording;
         return this;
     }
@@ -101,7 +101,7 @@ public class RecordManager {
         }
     }
 
-    public RecordManager(Activity context, FixedRatioCroppedTextureView croppedTextureView, final onRecordStatusListener recordStatusListener) {
+    public BaseRecordManager(Activity context, FixedRatioCroppedTextureView croppedTextureView, final onRecordStatusListener recordStatusListener) {
         this.context = context;
         this.preview = croppedTextureView;
         this.recordStatusListener = recordStatusListener;
@@ -138,7 +138,7 @@ public class RecordManager {
 
             @Override
             public void onPriviewData(byte[] data, Camera camera) throws Exception {
-                recordStatusListener.onPriviewData(data, camera);
+                previewFrameCamera(data, camera);
             }
         };
     }
@@ -257,7 +257,7 @@ public class RecordManager {
         releaseCamera();
     }
 
-    public RecordManager setVideoFile(File videoFile) {
+    public BaseRecordManager setVideoFile(File videoFile) {
         this.videoFile = videoFile;
         return this;
     }

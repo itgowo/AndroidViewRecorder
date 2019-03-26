@@ -13,5 +13,6 @@ public interface onRecordDataListener {
     void onRecordVideoData(Frame data) throws FFmpegFrameRecorder.Exception;
 
     void onRecordTimestamp(long timestamp) throws Exception;
+    @Deprecated
     void onPriviewData(byte[] data, Camera camera) throws Exception;
 }

@@ -1,5 +1,6 @@
 package com.itgowo.module.androidrecorder.recorder;
 
+import android.graphics.Bitmap;
 import android.hardware.Camera;
 
 public interface onRecordStatusListener {
@@ -14,6 +15,5 @@ public interface onRecordStatusListener {
 
     void onRecordResume() throws Exception;
 
-    void onPriviewData(byte[] data, Camera camera) throws Exception;
-
+    void onResultBitmap(Bitmap bitmap);
 }

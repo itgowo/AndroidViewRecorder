@@ -2,23 +2,21 @@ package com.itgowo.module.androidrecorder;
 
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Bitmap;
 import android.hardware.Camera;
-import android.media.ImageReader;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
 import android.widget.Toast;
 
 import com.itgowo.module.androidrecorder.recorder.ProgressDialogTask;
-import com.itgowo.module.androidrecorder.recorder.RecordManager;
+import com.itgowo.module.androidrecorder.recorder.BaseRecordManager;
 import com.itgowo.module.androidrecorder.recorder.onRecordStatusListener;
 import com.itgowo.module.androidrecorder.util.CameraHelper;
 
-import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.concurrent.Executors;
 
-import static com.itgowo.module.androidrecorder.recorder.RecordManager.MIN_VIDEO_LENGTH;
+import static com.itgowo.module.androidrecorder.recorder.BaseRecordManager.MIN_VIDEO_LENGTH;
 
 public class FFmpegRecordActivity extends BaseActivity {
     private Button mBtnResumeOrPause;
@@ -30,7 +28,7 @@ public class FFmpegRecordActivity extends BaseActivity {
     // Workaround for https://code.google.com/p/android/issues/detail?id=190966
 
     private onRecordStatusListener onRecordStatusListener;
-    private RecordManager recordManager;
+    private BaseRecordManager recordManager;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -87,12 +85,14 @@ public class FFmpegRecordActivity extends BaseActivity {
             }
 
             @Override
-            public void onPriviewData(byte[] data, Camera camera) throws Exception {
-                recordManager.previewFrameCamera(data, camera);
+            public void onResultBitmap(Bitmap bitmap) {
+
             }
+
+
         };
 
-        recordManager = new RecordManager(this, mPreview, onRecordStatusListener);
+        recordManager = new BaseRecordManager(this, mPreview, onRecordStatusListener);
         mBtnResumeOrPause.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {

@@ -29,7 +29,6 @@ public class AudioRecordThread extends BaseRecordThread {
     public void run() {
         android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_AUDIO);
         setName("AudioRecordThread");
-        Log.d(TAG, "mAudioRecord startRecordPrepare");
         mAudioRecord.startRecording();
 
         isRunning = true;
@@ -39,7 +38,6 @@ public class AudioRecordThread extends BaseRecordThread {
                 int bufferReadResult = mAudioRecord.read(audioData.array(), 0, audioData.capacity());
                 audioData.limit(bufferReadResult);
                 if (bufferReadResult > 0) {
-                    Log.v(TAG, "bufferReadResult: " + bufferReadResult);
                     try {
                         onRecordDataListener.onRecordAudioData(audioData);
                     } catch (FFmpegFrameRecorder.Exception e) {
@@ -49,10 +47,8 @@ public class AudioRecordThread extends BaseRecordThread {
                 }
             }
         }
-        Log.d(TAG, "mAudioRecord stopRecording");
         mAudioRecord.stop();
         mAudioRecord.release();
         mAudioRecord = null;
-        Log.d(TAG, "mAudioRecord released");
     }
 }
