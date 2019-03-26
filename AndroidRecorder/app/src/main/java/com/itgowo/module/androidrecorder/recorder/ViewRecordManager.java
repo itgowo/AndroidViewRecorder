@@ -20,7 +20,10 @@ import com.itgowo.module.androidrecorder.data.FrameToRecord;
 import com.itgowo.module.androidrecorder.util.CameraHelper;
 
 import org.bytedeco.javacpp.avcodec;
+import org.bytedeco.javacpp.avutil;
+import org.bytedeco.javacpp.opencv_core;
 import org.bytedeco.javacv.AndroidFrameConverter;
+import org.bytedeco.javacv.FFmpegFrameGrabber;
 import org.bytedeco.javacv.FFmpegFrameRecorder;
 import org.bytedeco.javacv.Frame;
 import org.bytedeco.javacv.FrameRecorder;
@@ -31,6 +34,9 @@ import java.io.IOException;
 import java.nio.Buffer;
 import java.util.List;
 import java.util.concurrent.LinkedBlockingQueue;
+
+import static org.bytedeco.javacpp.avutil.AV_PIX_FMT_RGBA;
+import static org.bytedeco.javacpp.helper.opencv_imgcodecs.cvLoadImage;
 
 public class ViewRecordManager {
     private static final int PREFERRED_PREVIEW_WIDTH = 320;
@@ -62,11 +68,11 @@ public class ViewRecordManager {
     private long lastPreviewFrameTime;
     private int cameraId = Camera.CameraInfo.CAMERA_FACING_FRONT;
     private int sampleAudioRateInHz = 44100;
-    private int frameRate = 30;
+    private int frameRate = 20;
     private int previewWidth = PREFERRED_PREVIEW_WIDTH;
     private int previewHeight = PREFERRED_PREVIEW_HEIGHT;
-    private int videoWidth = 320;
-    private int videoHeight = 240;
+    private int videoWidth = 640;
+    private int videoHeight = 480;
     private int frameDepth = Frame.DEPTH_UBYTE;
     private int frameChannels = 2;
 
@@ -143,6 +149,13 @@ public class ViewRecordManager {
             public void onRecordVideoData(Frame data) throws FFmpegFrameRecorder.Exception {
                 if (frameRecorder != null) {
                     frameRecorder.record(data);
+                }
+            }
+
+            @Override
+            public void onRecordVideoData2(Buffer data) throws FFmpegFrameRecorder.Exception {
+                if (frameRecorder != null) {
+                    frameRecorder.recordSamples(data);
                 }
             }
 
@@ -443,20 +456,16 @@ public class ViewRecordManager {
                 }
             }
         }
+
     }
 
     class ViewRecordSendThread extends Thread {
         @Override
         public void run() {
             while (isRecording()) {
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-                Bitmap bitmap = Bitmap.createScaledBitmap(getBitmapFromView(view), videoWidth, videoHeight, false);
+                Bitmap bitmap = Bitmap.createScaledBitmap(getBitmapFromView(view), videoWidth, videoHeight, true);
                 recordStatusListener.onResultBitmap(bitmap);
-                Frame frame = androidFrameConverter.convert(bitmap);
+                Frame frame = androidFrameConverter.convert( bitmap );
                 try {
                     previewFrameCamera(frame, camera);
                 } catch (Exception e) {
@@ -466,17 +475,17 @@ public class ViewRecordManager {
         }
     }
 
+
+
     public Bitmap getBitmapFromView(View v) {
-        Bitmap b = Bitmap.createBitmap(v.getWidth(), v.getHeight(), Bitmap.Config.RGB_565);
+        Bitmap b = Bitmap.createBitmap(v.getWidth(), v.getHeight(), Bitmap.Config.ARGB_8888);
         Canvas c = new Canvas(b);
         v.layout(v.getLeft(), v.getTop(), v.getRight(), v.getBottom());
-        // Draw background
         Drawable bgDrawable = v.getBackground();
         if (bgDrawable != null)
             bgDrawable.draw(c);
         else
             c.drawColor(Color.WHITE);
-        // Draw view to canvas
         v.draw(c);
         return b;
     }

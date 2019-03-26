@@ -11,6 +11,7 @@ import com.itgowo.module.androidrecorder.util.CameraHelper;
 import com.itgowo.module.androidrecorder.util.MiscUtils;
 
 import org.bytedeco.javacpp.avcodec;
+import org.bytedeco.javacpp.avutil;
 import org.bytedeco.javacv.FFmpegFrameRecorder;
 import org.bytedeco.javacv.Frame;
 import org.bytedeco.javacv.FrameRecorder;
@@ -123,8 +124,14 @@ public class BaseRecordManager {
             @Override
             public void onRecordVideoData(Frame data) throws FFmpegFrameRecorder.Exception {
                 if (frameRecorder != null) {
-                    frameRecorder.record(data);
+                    frameRecorder.record(data );
+
                 }
+            }
+
+            @Override
+            public void onRecordVideoData2(Buffer data) throws FFmpegFrameRecorder.Exception {
+
             }
 
             @Override
