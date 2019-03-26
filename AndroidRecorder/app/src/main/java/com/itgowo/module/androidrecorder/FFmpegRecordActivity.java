@@ -3,6 +3,7 @@ package com.itgowo.module.androidrecorder;
 import android.content.Context;
 import android.content.Intent;
 import android.hardware.Camera;
+import android.media.ImageReader;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
@@ -92,7 +93,6 @@ public class FFmpegRecordActivity extends BaseActivity {
         };
 
         recordManager = new RecordManager(this, mPreview, onRecordStatusListener);
-        recordManager.init();
         mBtnResumeOrPause.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -136,7 +136,6 @@ public class FFmpegRecordActivity extends BaseActivity {
 
                     @Override
                     protected Void doInBackground(Void... params) {
-                        recordManager.stopRecording();
                         recordManager.stopRecording();
 //                        String recordedTime = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
                         recordManager.setVideoFile(CameraHelper.getOutputMediaFile("111", CameraHelper.MEDIA_TYPE_VIDEO));
@@ -195,7 +194,6 @@ public class FFmpegRecordActivity extends BaseActivity {
         @Override
         protected Void doInBackground(Void... params) {
             recordManager.stopRecording();
-            recordManager.stopRecording();
             recordManager.releaseRecorder(false);
             return null;
         }
@@ -205,7 +203,7 @@ public class FFmpegRecordActivity extends BaseActivity {
             super.onPostExecute(aVoid);
 
             Intent intent = new Intent(FFmpegRecordActivity.this, PlaybackActivity.class);
-            intent.putExtra(PlaybackActivity.INTENT_NAME_VIDEO_PATH, recordManager.getmVideo().getPath());
+            intent.putExtra(PlaybackActivity.INTENT_NAME_VIDEO_PATH, recordManager.getVideoFile().getPath());
             startActivity(intent);
         }
     }

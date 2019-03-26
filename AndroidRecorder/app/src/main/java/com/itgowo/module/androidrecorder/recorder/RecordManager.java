@@ -111,6 +111,7 @@ public class RecordManager {
         recycledFrameQueue = new LinkedBlockingQueue<>(2);
         time.clear();
         initLibrary();
+        init();
         recordDataListener = new onRecordDataListener() {
             @Override
             public void onRecordAudioData(Buffer... data) throws FFmpegFrameRecorder.Exception {
@@ -123,7 +124,6 @@ public class RecordManager {
             public void onRecordVideoData(Frame data) throws FFmpegFrameRecorder.Exception {
                 if (frameRecorder != null) {
                     frameRecorder.record(data);
-                    System.out.println("RecordManager.onRecordVideoData");
                 }
             }
 
@@ -132,7 +132,6 @@ public class RecordManager {
                 if (frameRecorder != null) {
                     if (timestamp > frameRecorder.getTimestamp()) {
                         frameRecorder.setTimestamp(timestamp);
-                        System.out.println("RecordManager.onRecordTimestamp");
                     }
                 }
             }
@@ -144,7 +143,7 @@ public class RecordManager {
         };
     }
 
-    public void init() {
+    private void init() {
         preview.setPreviewSize(previewWidth, previewHeight);
         preview.setCroppedSizeWeight(videoWidth, videoHeight);
         preview.setSurfaceTextureListener(new TextureView.SurfaceTextureListener() {
@@ -170,7 +169,7 @@ public class RecordManager {
         });
     }
 
-    public File getmVideo() {
+    public File getVideoFile() {
         return videoFile;
     }
 
