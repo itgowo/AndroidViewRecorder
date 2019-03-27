@@ -60,11 +60,8 @@ public class VideoRecordThread extends BaseRecordThread {
                 ie.printStackTrace();
                 break;
             }
-//            Frame filteredFrame = null;
             try {
                 onRecordDataListener.onRecordTimestamp(recordedFrame.getTimestamp());
-//                frameFilter.push(recordedFrame.getFrame());
-//                filteredFrame = frameFilter.pull();
                 onRecordDataListener.onRecordVideoData(recordedFrame.getFrame());
             } catch (Exception e) {
                 e.printStackTrace();
