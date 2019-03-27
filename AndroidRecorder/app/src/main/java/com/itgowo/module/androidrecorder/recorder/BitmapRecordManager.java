@@ -5,7 +5,7 @@ import android.view.View;
 
 import com.itgowo.module.androidrecorder.FixedRatioCroppedTextureView;
 
-public class BitmapRecordManager extends BaseRecordManager{
+public class BitmapRecordManager extends TextureRecordManager {
     private View view;
 
 

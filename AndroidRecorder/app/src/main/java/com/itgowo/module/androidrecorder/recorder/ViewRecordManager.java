@@ -23,20 +23,18 @@ import org.bytedeco.javacpp.avcodec;
 import org.bytedeco.javacv.AndroidFrameConverter;
 import org.bytedeco.javacv.FFmpegFrameRecorder;
 import org.bytedeco.javacv.Frame;
-import org.bytedeco.javacv.FrameRecorder;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.IOException;
 import java.nio.Buffer;
-import java.util.List;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 public class ViewRecordManager {
-    private static final int PREFERRED_PREVIEW_WIDTH = 320;
-    private static final int PREFERRED_PREVIEW_HEIGHT = 240;
-    private static final String TAG = "BaseRecordManager";
-    public static final long MIN_VIDEO_LENGTH = 1 * 1000;
+
+    private static final String TAG = "ViewRecordManager";
     public static final long MAX_VIDEO_LENGTH = 90 * 1000;
 
     private Activity context;
@@ -44,10 +42,17 @@ public class ViewRecordManager {
     private SurfaceView preview;
     private onRecordStatusListener recordStatusListener;
     private onRecordDataListener recordDataListener;
+    private ThreadPoolExecutor threadPoolExecutor = new ThreadPoolExecutor(0, 1, 60, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>(), new ThreadFactory() {
+        @Override
+        public Thread newThread(Runnable r) {
+            Thread thread = new Thread(r);
+            thread.setName("ViewRecorderInit");
+            return thread;
+        }
+    });
 
 
     private LinkedBlockingQueue<FrameToRecord> frameToRecordQueue;
-    private LinkedBlockingQueue<FrameToRecord> recycledFrameQueue;
     private Time time = new Time();
     private AndroidFrameConverter androidFrameConverter = new AndroidFrameConverter();
 
@@ -55,16 +60,17 @@ public class ViewRecordManager {
     private AudioRecordThread audioRecordThread;
     private ViewRecordSendThread viewRecordSendThread;
     private FFmpegFrameRecorder frameRecorder;
+    private CameraManager camera;
 
     private int mFrameToRecordCount;
     private int mFrameRecordedCount;
     private long mTotalProcessFrameTime;
     private long lastPreviewFrameTime;
-    private int cameraId = Camera.CameraInfo.CAMERA_FACING_FRONT;
+
     private int sampleAudioRateInHz = 44100;
     private int frameRate = 30;
-    private int previewWidth = PREFERRED_PREVIEW_WIDTH;
-    private int previewHeight = PREFERRED_PREVIEW_HEIGHT;
+    private int previewWidth;
+    private int previewHeight;
     private int videoWidth = 640;
     private int videoHeight = 480;
     private int frameDepth = Frame.DEPTH_UBYTE;
@@ -73,7 +79,7 @@ public class ViewRecordManager {
     private volatile boolean isRecording = false;
     private File videoFile;
 
-    private Camera camera;
+
     private ImageView cameraview;
 
 
@@ -87,36 +93,13 @@ public class ViewRecordManager {
     }
 
     public void initLibrary() {
-        Thread thread = new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    FFmpegFrameRecorder.tryLoad();
-                } catch (FrameRecorder.Exception e) {
-                    e.printStackTrace();
-                }
-            }
-        });
-        thread.start();
+        threadPoolExecutor.execute(new initLibraryRunnable());
     }
 
-    public void releaseCamera() {
-        if (camera != null) {
-            camera.release();
-            camera = null;
-        }
-    }
-
-    public void acquireCamera() {
-        try {
-            camera = Camera.open(cameraId);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
 
     public ViewRecordManager(Activity context, View view, final ImageView cameraview, final onRecordStatusListener recordStatusListener) {
         this.context = context;
+        camera = new CameraManager(context);
         this.view = view;
         this.cameraview = cameraview;
         this.preview = new SurfaceView(context);
@@ -124,10 +107,7 @@ public class ViewRecordManager {
         ViewGroup viewGroup = (ViewGroup) view.getParent();
         viewGroup.addView(this.preview);
         this.recordStatusListener = recordStatusListener;
-        // At most buffer 10 Frame
         frameToRecordQueue = new LinkedBlockingQueue<>(10);
-        // At most recycle 2 Frame
-        recycledFrameQueue = new LinkedBlockingQueue<>(2);
         time.clear();
         initLibrary();
         init();
@@ -147,13 +127,6 @@ public class ViewRecordManager {
             }
 
             @Override
-            public void onRecordVideoData2(Buffer data) throws FFmpegFrameRecorder.Exception {
-                if (frameRecorder != null) {
-                    frameRecorder.recordSamples(data);
-                }
-            }
-
-            @Override
             public void onRecordTimestamp(long timestamp) throws Exception {
                 if (frameRecorder != null) {
                     if (timestamp > frameRecorder.getTimestamp()) {
@@ -163,7 +136,7 @@ public class ViewRecordManager {
             }
 
             @Override
-            public void onPriviewData(byte[] data, Camera camera) throws Exception {
+            public void onPriviewCameraData(byte[] data, Camera camera) throws Exception {
                 cameraview.setImageBitmap(getBitmapFromYuv(data, camera));
             }
 
@@ -174,8 +147,8 @@ public class ViewRecordManager {
         preview.getHolder().addCallback(new SurfaceHolder.Callback() {
             @Override
             public void surfaceCreated(SurfaceHolder holder) {
-                releaseCamera();
-                acquireCamera();
+                camera.releaseCamera();
+                camera.acquireCamera();
                 startPreview();
             }
 
@@ -196,18 +169,13 @@ public class ViewRecordManager {
     }
 
     public void switchCamera() {
-        cameraId = (cameraId + 1) % 2;
         stopRecording();
-        stopPreview();
-        releaseCamera();
-        acquireCamera();
+        camera.stopPreview();
+        camera.switchCamera();
         startPreview();
-        startRecordPrepare();
+        prepare();
     }
 
-    public void setPreviewSize(int width, int height) {
-
-    }
 
     private Bitmap getBitmapFromYuv(byte[] data, Camera camera) {
         if (data != null) {
@@ -222,59 +190,25 @@ public class ViewRecordManager {
         return null;
     }
 
-    public void stopPreview() {
-        if (camera != null) {
-            camera.stopPreview();
-            camera.setPreviewCallbackWithBuffer(null);
-        }
-    }
 
     public void startPreview() {
-        if (camera == null) {
-            return;
-        }
-
-        Camera.Parameters parameters = camera.getParameters();
-        List<Camera.Size> previewSizes = parameters.getSupportedPreviewSizes();
-        Camera.Size previewSize = CameraHelper.getOptimalSize(previewSizes, PREFERRED_PREVIEW_WIDTH, PREFERRED_PREVIEW_HEIGHT);
-        // if changed, reassign values and request layout
-        if (previewWidth != previewSize.width || previewHeight != previewSize.height) {
-            previewWidth = previewSize.width;
-            previewHeight = previewSize.height;
-            setPreviewSize(previewWidth, previewHeight);
-            preview.requestLayout();
-        }
-        parameters.setPreviewSize(previewWidth, previewHeight);
-//        parameters.setPreviewFormat(ImageFormat.NV21);
-        if (parameters.getSupportedFocusModes().contains(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO)) {
-            parameters.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO);
-        }
-        camera.setParameters(parameters);
-        camera.setDisplayOrientation(CameraHelper.getCameraDisplayOrientation(context, cameraId));
-        camera.setPreviewCallback(new Camera.PreviewCallback() {
-
+        camera.startPreview(previewWidth, previewHeight, preview, new Camera.PreviewCallback() {
             @Override
             public void onPreviewFrame(byte[] data, Camera camera) {
                 try {
-                    recordDataListener.onPriviewData(data, camera);
+                    recordDataListener.onPriviewCameraData(data, camera);
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
             }
         });
-        try {
-            camera.setPreviewDisplay(preview.getHolder());
-        } catch (IOException ioe) {
-            ioe.printStackTrace();
-        }
-        camera.startPreview();
     }
 
     public void onActivityPause() {
         pauseRecorder();
         stopRecording();
-        stopPreview();
-        releaseCamera();
+        camera.stopPreview();
+        camera.releaseCamera();
     }
 
     public ViewRecordManager setVideoFile(File videoFile) {
@@ -285,22 +219,8 @@ public class ViewRecordManager {
     /**
      * 启动录制功能，等价于启动后暂停，isRecording目前为false
      */
-    public void startRecordPrepare() {
-        try {
-            initRecorder();
-            frameRecorder.start();
-            audioRecordThread = new AudioRecordThread(sampleAudioRateInHz, recordDataListener);
-            audioRecordThread.start();
-            videoRecordThread = new VideoRecordThread(context, frameRate, frameToRecordQueue, recycledFrameQueue, recordDataListener);
-            if (videoRecordThread != null) {
-                videoRecordThread.setPreviewWidthHeight(previewWidth, previewHeight);
-            }
-            videoRecordThread.start();
-            viewRecordSendThread = new ViewRecordSendThread();
-            recordStatusListener.onRecordPrepare();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+    public void prepare() {
+        threadPoolExecutor.execute(new prepareRecordRunnable());
     }
 
     public void stopRecording() {
@@ -335,7 +255,6 @@ public class ViewRecordManager {
         videoRecordThread = null;
         viewRecordSendThread = null;
         frameToRecordQueue.clear();
-        recycledFrameQueue.clear();
 
         if (frameRecorder != null) {
             try {
@@ -353,7 +272,7 @@ public class ViewRecordManager {
         }
     }
 
-    public void initRecorder() {
+    private void initRecorder() {
         if (videoFile.exists()) {
             String oriFileName = videoFile.getName();
             int index = videoFile.getName().lastIndexOf(".");
@@ -369,7 +288,6 @@ public class ViewRecordManager {
                 i++;
             }
         }
-
         frameRecorder = new FFmpegFrameRecorder(videoFile, videoWidth, videoHeight, 1);
         frameRecorder.setFormat("mp4");
         frameRecorder.setSampleRate(sampleAudioRateInHz);
@@ -425,7 +343,7 @@ public class ViewRecordManager {
         return time;
     }
 
-    public void previewFrameCamera(Frame frame, Camera camera) {
+    private void previewFrame(Frame frame, Camera camera) {
         long thisPreviewFrameTime = System.currentTimeMillis();
         lastPreviewFrameTime = thisPreviewFrameTime;
         if (isRecording()) {
@@ -434,14 +352,6 @@ public class ViewRecordManager {
             } else {
                 long recordedTime = time.getTime();
                 long curRecordedTime = System.currentTimeMillis() - time.getStartTime() + recordedTime;
-                if (curRecordedTime > MAX_VIDEO_LENGTH) {
-                    try {
-                        recordStatusListener.onRecordStoped();
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                    return;
-                }
                 long timestamp = 1000 * curRecordedTime;
                 FrameToRecord frameToRecord = new FrameToRecord(timestamp, frame);
                 frameToRecord.setTimestamp(timestamp);
@@ -456,14 +366,14 @@ public class ViewRecordManager {
     class ViewRecordSendThread extends Thread {
         @Override
         public void run() {
-            long delay= (long) (1000/(frameRate*1.1));
+            long delay = (long) (1000 / (frameRate * 1.1));
             while (isRecording()) {
                 Bitmap bitmap = Bitmap.createScaledBitmap(getBitmapFromView(view), videoWidth, videoHeight, true);
                 recordStatusListener.onResultBitmap(bitmap);
                 Frame frame = androidFrameConverter.convert(bitmap);
                 try {
                     Thread.sleep(delay);
-                    previewFrameCamera(frame, camera);
+                    previewFrame(frame, camera.getCamera());
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -483,5 +393,48 @@ public class ViewRecordManager {
             c.drawColor(Color.WHITE);
         v.draw(c);
         return b;
+    }
+
+    private class initLibraryRunnable implements Runnable {
+
+        @Override
+        public void run() {
+            try {
+                FFmpegFrameRecorder.tryLoad();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private class prepareRecordRunnable implements Runnable {
+
+        @Override
+        public void run() {
+            try {
+                initRecorder();
+                frameRecorder.start();
+                audioRecordThread = new AudioRecordThread(sampleAudioRateInHz, recordDataListener);
+                audioRecordThread.start();
+                videoRecordThread = new VideoRecordThread(frameToRecordQueue  , recordDataListener);
+                if (videoRecordThread != null) {
+                    videoRecordThread.setPreviewWidthHeight(previewWidth, previewHeight);
+                }
+                videoRecordThread.start();
+                viewRecordSendThread = new ViewRecordSendThread();
+                view.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            recordStatusListener.onRecordPrepare();
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    }
+                });
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
     }
 }

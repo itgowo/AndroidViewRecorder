@@ -22,15 +22,16 @@
         android:layout_height="wrap_content">
 
         <Button
-            android:id="@+id/preview"
+            android:id="@+id/prepare"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="preview" />
+            android:text="prepare" />
 
         <Button
             android:id="@+id/start"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:enabled="false"
             android:text="start" />
 
         <Button

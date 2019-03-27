@@ -11,7 +11,6 @@ import com.itgowo.module.androidrecorder.util.CameraHelper;
 import com.itgowo.module.androidrecorder.util.MiscUtils;
 
 import org.bytedeco.javacpp.avcodec;
-import org.bytedeco.javacpp.avutil;
 import org.bytedeco.javacv.FFmpegFrameRecorder;
 import org.bytedeco.javacv.Frame;
 import org.bytedeco.javacv.FrameRecorder;
@@ -23,10 +22,10 @@ import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.concurrent.LinkedBlockingQueue;
 
-public class BaseRecordManager {
+public class TextureRecordManager {
     private static final int PREFERRED_PREVIEW_WIDTH = 640;
     private static final int PREFERRED_PREVIEW_HEIGHT = 480;
-    private static final String TAG = "BaseRecordManager";
+    private static final String TAG = "TextureRecordManager";
     public static final long MIN_VIDEO_LENGTH = 1 * 1000;
     public static final long MAX_VIDEO_LENGTH = 90 * 1000;
 
@@ -68,7 +67,7 @@ public class BaseRecordManager {
         return isRecording;
     }
 
-    public BaseRecordManager setRecording(boolean recording) {
+    public TextureRecordManager setRecording(boolean recording) {
         isRecording = recording;
         return this;
     }
@@ -102,7 +101,7 @@ public class BaseRecordManager {
         }
     }
 
-    public BaseRecordManager(Activity context, FixedRatioCroppedTextureView croppedTextureView, final onRecordStatusListener recordStatusListener) {
+    public TextureRecordManager(Activity context, FixedRatioCroppedTextureView croppedTextureView, final onRecordStatusListener recordStatusListener) {
         this.context = context;
         this.preview = croppedTextureView;
         this.recordStatusListener = recordStatusListener;
@@ -124,14 +123,9 @@ public class BaseRecordManager {
             @Override
             public void onRecordVideoData(Frame data) throws FFmpegFrameRecorder.Exception {
                 if (frameRecorder != null) {
-                    frameRecorder.record(data );
+                    frameRecorder.record(data);
 
                 }
-            }
-
-            @Override
-            public void onRecordVideoData2(Buffer data) throws FFmpegFrameRecorder.Exception {
-
             }
 
             @Override
@@ -144,7 +138,7 @@ public class BaseRecordManager {
             }
 
             @Override
-            public void onPriviewData(byte[] data, Camera camera) throws Exception {
+            public void onPriviewCameraData(byte[] data, Camera camera) throws Exception {
                 previewFrameCamera(data, camera);
             }
         };
@@ -243,7 +237,7 @@ public class BaseRecordManager {
             @Override
             public void onPreviewFrame(byte[] data, Camera camera) {
                 try {
-                    recordDataListener.onPriviewData(data, camera);
+                    recordDataListener.onPriviewCameraData(data, camera);
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -264,7 +258,7 @@ public class BaseRecordManager {
         releaseCamera();
     }
 
-    public BaseRecordManager setVideoFile(File videoFile) {
+    public TextureRecordManager setVideoFile(File videoFile) {
         this.videoFile = videoFile;
         return this;
     }
@@ -278,7 +272,7 @@ public class BaseRecordManager {
             frameRecorder.start();
             audioRecordThread = new AudioRecordThread(sampleAudioRateInHz, recordDataListener);
             audioRecordThread.start();
-            videoRecordThread = new VideoRecordThread(context, frameRate, frameToRecordQueue, recycledFrameQueue, recordDataListener);
+            videoRecordThread = new VideoRecordThread(frameToRecordQueue, recordDataListener);
             if (videoRecordThread != null) {
                 videoRecordThread.setPreviewWidthHeight(previewWidth, previewHeight);
             }

@@ -103,7 +103,7 @@ public class CameraHelper {
         }
 
         File mediaStorageDir = new File(Environment.getExternalStoragePublicDirectory(
-                Environment.DIRECTORY_PICTURES), BuildConfig.APPLICATION_ID);
+                Environment.DIRECTORY_MOVIES), BuildConfig.APPLICATION_ID);
         // This location works best if you want the created images to be shared
         // between applications and persist after your app has been uninstalled.
 

@@ -2,7 +2,6 @@ package com.itgowo.module.androidrecorder;
 
 import android.graphics.Bitmap;
 import android.graphics.drawable.Drawable;
-import android.hardware.Camera;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
 import android.view.View;
@@ -27,11 +26,11 @@ public class Main2Activity extends AppCompatActivity {
 
         recordLayout = (RelativeLayout) findViewById(R.id.record_layout);
         cameraview = (ImageView) findViewById(R.id.cameraview);
-        previewBtn = findViewById(R.id.preview);
+        previewBtn = findViewById(R.id.prepare);
         startbtn = findViewById(R.id.start);
         stopBtn = findViewById(R.id.stop);
         resultview=findViewById(R.id.result);
-        recordManager = new ViewRecordManager(this, recordLayout, cameraview, new onRecordStatusListener() {
+        recordManager = new ViewRecordManager(this, recordLayout,  cameraview, new onRecordStatusListener() {
             @Override
             public void onRecordStoped() throws Exception {
 
@@ -39,7 +38,8 @@ public class Main2Activity extends AppCompatActivity {
 
             @Override
             public void onRecordPrepare() throws Exception {
-
+                System.out.println("Main2Activity.onRecordPrepare");
+                startbtn.setEnabled(true);
             }
 
             @Override
@@ -72,9 +72,9 @@ public class Main2Activity extends AppCompatActivity {
         previewBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                startbtn.setEnabled(false);
                 recordManager.setVideoFile(CameraHelper.getOutputMediaFile("111", CameraHelper.MEDIA_TYPE_VIDEO));
-                recordManager.acquireCamera();
-                recordManager.startRecordPrepare();
+                recordManager.prepare();
                 recordManager.startPreview();
             }
         });
@@ -92,5 +92,6 @@ public class Main2Activity extends AppCompatActivity {
             }
         });
         recordLayout.setBackground(Drawable.createFromPath("/storage/emulated/0/UCDownloads/pictures/111.jpg"));
+        recordManager.initLibrary();
     }
 }
