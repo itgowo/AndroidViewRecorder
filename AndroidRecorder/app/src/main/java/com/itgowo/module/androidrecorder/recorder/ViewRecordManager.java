@@ -178,7 +178,6 @@ public class ViewRecordManager {
     }
 
     public void switchCamera() {
-        stopRecording();
         camera.stopPreview();
         camera.switchCamera();
         startPreview();
