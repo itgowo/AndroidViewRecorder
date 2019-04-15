@@ -17,7 +17,6 @@ import android.view.ViewGroup;
 import android.widget.ImageView;
 
 import com.itgowo.module.androidrecorder.data.FrameToRecord;
-import com.itgowo.module.androidrecorder.util.CameraHelper;
 
 import org.bytedeco.javacpp.avcodec;
 import org.bytedeco.javacv.AndroidFrameConverter;
@@ -76,6 +75,7 @@ public class ViewRecordManager {
     private int frameDepth = Frame.DEPTH_UBYTE;
     private int frameChannels = 2;
 
+    private volatile boolean isRunning = false;
     private volatile boolean isRecording = false;
     private File videoFile;
 
@@ -83,12 +83,21 @@ public class ViewRecordManager {
     private ImageView cameraview;
 
 
+    public boolean isRunning() {
+        return isRunning;
+    }
+
     public boolean isRecording() {
         return isRecording;
     }
 
     public ViewRecordManager setRecording(boolean recording) {
         isRecording = recording;
+        return this;
+    }
+
+    public ViewRecordManager setRunning(boolean running) {
+        isRunning = running;
         return this;
     }
 
@@ -173,7 +182,6 @@ public class ViewRecordManager {
         camera.stopPreview();
         camera.switchCamera();
         startPreview();
-        prepare();
     }
 
 
@@ -224,6 +232,8 @@ public class ViewRecordManager {
     }
 
     public void stopRecording() {
+        setRunning(false);
+        setRecording(false);
         if (audioRecordThread != null) {
             if (audioRecordThread.isRunning()) {
                 audioRecordThread.stopRunning();
@@ -266,6 +276,7 @@ public class ViewRecordManager {
 
         time.clear();
         try {
+            setRunning(false);
             recordStatusListener.onRecordStoped();
         } catch (Exception e) {
             e.printStackTrace();
@@ -313,6 +324,9 @@ public class ViewRecordManager {
     }
 
     public void pauseRecorder() {
+        if (!isRunning()) {
+            return;
+        }
         if (isRecording()) {
             time.pause();
             setRecording(false);
@@ -326,11 +340,23 @@ public class ViewRecordManager {
     }
 
     public void resumeRecording() {
-        if (!isRecording()) {
+        if (!isRunning()) {
+            setRunning(true);
             setRecording(true);
             time.start();
             audioRecordThread.resumeRecord();
             viewRecordSendThread.start();
+            try {
+                recordStatusListener.onRecordStarted();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            return;
+        }
+        if (!isRecording()) {
+            setRecording(true);
+            time.start();
+            audioRecordThread.resumeRecord();
             try {
                 recordStatusListener.onRecordResume();
             } catch (Exception e) {
@@ -346,7 +372,7 @@ public class ViewRecordManager {
     private void previewFrame(Frame frame, Camera camera) {
         long thisPreviewFrameTime = System.currentTimeMillis();
         lastPreviewFrameTime = thisPreviewFrameTime;
-        if (isRecording()) {
+        if (isRunning()) {
             if (audioRecordThread == null || !audioRecordThread.isRunning()) {
                 time.start();
             } else {
@@ -366,16 +392,18 @@ public class ViewRecordManager {
     class ViewRecordSendThread extends Thread {
         @Override
         public void run() {
-            long delay = (long) (1000 / (frameRate * 1.1));
-            while (isRecording()) {
-                Bitmap bitmap = Bitmap.createScaledBitmap(getBitmapFromView(view), videoWidth, videoHeight, true);
-                recordStatusListener.onResultBitmap(bitmap);
-                Frame frame = androidFrameConverter.convert(bitmap);
-                try {
-                    Thread.sleep(delay);
-                    previewFrame(frame, camera.getCamera());
-                } catch (Exception e) {
-                    e.printStackTrace();
+            while (isRunning()) {
+                long delay = (long) (1000 / (frameRate * 1.1));
+                while (isRecording()) {
+                    Bitmap bitmap = Bitmap.createScaledBitmap(getBitmapFromView(view), videoWidth, videoHeight, true);
+                    recordStatusListener.onResultBitmap(bitmap);
+                    Frame frame = androidFrameConverter.convert(bitmap);
+                    try {
+                        Thread.sleep(delay);
+                        previewFrame(frame, camera.getCamera());
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
                 }
             }
         }
@@ -416,7 +444,7 @@ public class ViewRecordManager {
                 frameRecorder.start();
                 audioRecordThread = new AudioRecordThread(sampleAudioRateInHz, recordDataListener);
                 audioRecordThread.start();
-                videoRecordThread = new VideoRecordThread(frameToRecordQueue  , recordDataListener);
+                videoRecordThread = new VideoRecordThread(frameToRecordQueue, recordDataListener);
                 if (videoRecordThread != null) {
                     videoRecordThread.setPreviewWidthHeight(previewWidth, previewHeight);
                 }

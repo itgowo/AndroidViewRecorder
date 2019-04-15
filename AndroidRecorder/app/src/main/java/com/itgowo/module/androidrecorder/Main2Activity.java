@@ -17,7 +17,7 @@ public class Main2Activity extends AppCompatActivity {
     private RelativeLayout recordLayout;
     private ImageView cameraview,resultview;
     private ViewRecordManager recordManager;
-    private Button startbtn, previewBtn, stopBtn;
+    private Button startbtn, previewBtn, stopBtn,btn_switch_camera;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -29,32 +29,35 @@ public class Main2Activity extends AppCompatActivity {
         previewBtn = findViewById(R.id.prepare);
         startbtn = findViewById(R.id.start);
         stopBtn = findViewById(R.id.stop);
+        btn_switch_camera = findViewById(R.id.btn_switch_camera);
         resultview=findViewById(R.id.result);
         recordManager = new ViewRecordManager(this, recordLayout,  cameraview, new onRecordStatusListener() {
             @Override
             public void onRecordStoped() throws Exception {
-
+                startbtn.setText("开始");
+                startbtn.setEnabled(false);
             }
 
             @Override
             public void onRecordPrepare() throws Exception {
                 System.out.println("Main2Activity.onRecordPrepare");
                 startbtn.setEnabled(true);
+                startbtn.setText("开始");
             }
 
             @Override
             public void onRecordStarted() throws Exception {
-
+                startbtn.setText("暂停");
             }
 
             @Override
             public void onRecordPause() throws Exception {
-
+                startbtn.setText("继续");
             }
 
             @Override
             public void onRecordResume() throws Exception {
-
+                startbtn.setText("暂停");
             }
 
             @Override
@@ -81,7 +84,11 @@ public class Main2Activity extends AppCompatActivity {
         startbtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                recordManager.resumeRecording();
+                if (recordManager.isRecording()){
+                    recordManager.pauseRecorder();
+                }else {
+                    recordManager.resumeRecording();
+                }
             }
         });
         stopBtn.setOnClickListener(new View.OnClickListener() {
@@ -93,5 +100,11 @@ public class Main2Activity extends AppCompatActivity {
         });
         recordLayout.setBackground(Drawable.createFromPath("/storage/emulated/0/UCDownloads/pictures/111.jpg"));
         recordManager.initLibrary();
+        btn_switch_camera.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                recordManager.switchCamera();
+            }
+        });
     }
 }
